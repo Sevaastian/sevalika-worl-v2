@@ -631,7 +631,7 @@ export const ROOMS: RoomDef[] = [
 
 export const ROOM_NPCS: Record<string, { kind: NpcKind; name: string; gx: number; gy: number; shirt: string; hair: string; skin: string }[]> = {
   avm: [{ kind: "stylist", name: "Stilist Defne", gx: 3, gy: 4, shirt: "#a855f7", hair: "#78350f", skin: "#fdba74" }],
-  "cadde-1": [{ kind: "oyunika", name: "Oyunika Mert", gx: 15, gy: 2 shirt: "#ec4899", hair: "#facc15", skin: "#fed7aa" }],
+    "cadde-1": [{ kind: "oyunika", name: "Oyunika Mert", gx: 15, gy: 2, shirt: "#ec4899", hair: "#facc15", skin: "#fed7aa" }],
   iskele: [{ kind: "fisher", name: "Balıkçı Hasan", gx: 7, gy: 3, shirt: "#0e7490", hair: "#e2e8f0", skin: "#d99a6c" }],
   restoran: [{ kind: "chef", name: "Şef Kemal", gx: 3, gy: 3, shirt: "#f8fafc", hair: "#1e293b", skin: "#fdba74" }],
   ciftlik: [{ kind: "farmer", name: "Çiftçi Ayşe", gx: 3, gy: 4, shirt: "#65a30d", hair: "#92400e", skin: "#fdba74" }],
