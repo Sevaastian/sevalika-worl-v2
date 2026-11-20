@@ -1447,9 +1447,11 @@ on conflict (slug) do update set
   name = excluded.name, min_role = excluded.min_role,
   furni = case when public.rooms.cols is distinct from excluded.cols or public.rooms.rows is distinct from excluded.rows
                  or public.rooms.layout_v < excluded.layout_v
+                 or jsonb_array_length(coalesce(public.rooms.furni, '[]'::jsonb)) = 0
                then excluded.furni else public.rooms.furni end,
   cols = excluded.cols, rows = excluded.rows, spawn_x = excluded.spawn_x, spawn_y = excluded.spawn_y,
   updated_at = case when public.rooms.cols is distinct from excluded.cols or public.rooms.layout_v < excluded.layout_v
+                      or jsonb_array_length(coalesce(public.rooms.furni, '[]'::jsonb)) = 0
                     then now() else public.rooms.updated_at end,
   layout_v = excluded.layout_v;
 
