@@ -1121,23 +1121,93 @@ export function drawRoom(
     drawSahilKasabasiExtras(ctx, l, time);
   }
 
-  // Kapı (portal) kareleri
-  const pulse = 0.55 + Math.sin(time / 350) * 0.2;
+  // Kapı (portal) okları: zeminde dışarıyı gösteren ok, üzerine gelince parlar ve isim kutusu çıkar
   for (const p of portals) {
     const { sx, sy } = gridToScreen(p.gx, p.gy, l);
-    tilePath(ctx, sx, sy, l, 2 * l.scale);
-    ctx.fillStyle = theme.accent;
-    ctx.globalAlpha = pulse;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.lineWidth = 1;
+    const cx = sx;
+    const cy = sy + l.tileH / 2;
+    const hw = l.tileW / 2;
+    const hh = l.tileH / 2;
+    const isHover = hover !== null && hover.gx === p.gx && hover.gy === p.gy;
+    // Çıkış yönü: hangi kenara yakınsa oraya bakar
+    let dx = 0;
+    let dy = 0; // grid yönü
+    if (p.gy === 0) dy = -1;
+    else if (p.gx === 0) dx = -1;
+    else if (p.gx === cols - 1) dx = 1;
+    else if (p.gy === rows - 1) dy = 1;
+    else dy = 1;
+    // grid yönü → ekran yönü (izometrik)
+    const vx = (dx - dy) * hw;
+    const vy = (dx + dy) * hh;
+    const len = Math.hypot(vx, vy) || 1;
+    const ux = vx / len;
+    const uy = vy / len;
+    const nx = -uy;
+    const ny = ux;
+    const bob = Math.sin(time / 260) * 3 * l.scale;
+    const k = l.scale;
+    const ox = cx + ux * bob;
+    const oy = cy + uy * bob;
+    const glow = isHover ? 1 : 0.9 + Math.sin(time / 350) * 0.1;
 
-    ctx.font = `bold ${Math.max(9, 10 * l.scale)}px sans-serif`;
+    // zemin halkası
+    ctx.save();
+    ctx.globalAlpha = isHover ? 0.5 : 0.28;
+    ctx.fillStyle = theme.accent;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, hw * 0.62, hh * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ok gövdesi + başı
+    const tail = -15 * k;
+    const neck = 2 * k;
+    const tip = 17 * k;
+    const sw = 5 * k;
+    const hwid = 11 * k;
+    ctx.save();
+    ctx.globalAlpha = glow;
+    ctx.beginPath();
+    ctx.moveTo(ox + ux * tail + nx * sw, oy + uy * tail + ny * sw * 0.5);
+    ctx.lineTo(ox + ux * neck + nx * sw, oy + uy * neck + ny * sw * 0.5);
+    ctx.lineTo(ox + ux * neck + nx * hwid, oy + uy * neck + ny * hwid * 0.5);
+    ctx.lineTo(ox + ux * tip, oy + uy * tip);
+    ctx.lineTo(ox + ux * neck - nx * hwid, oy + uy * neck - ny * hwid * 0.5);
+    ctx.lineTo(ox + ux * neck - nx * sw, oy + uy * neck - ny * sw * 0.5);
+    ctx.lineTo(ox + ux * tail - nx * sw, oy + uy * tail - ny * sw * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = isHover ? "#fde047" : theme.accent;
+    ctx.shadowColor = isHover ? "#fde047" : theme.accent;
+    ctx.shadowBlur = isHover ? 14 : 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+    ctx.restore();
+
+    // isim: her zaman görünür; üzerine gelince büyür ve kutu içine alınır
+    const fs = Math.max(9, (isHover ? 12 : 10) * l.scale);
+    ctx.font = `bold ${fs}px sans-serif`;
+    const text = `🚪 ${p.label}`;
+    const ty = cy - 20 * k - (isHover ? 4 * k : 0);
+    if (isHover) {
+      const tw = ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+      ctx.beginPath();
+      ctx.roundRect(cx - tw / 2 - 7, ty - fs - 1, tw + 14, fs + 8, 6);
+      ctx.fill();
+      ctx.strokeStyle = "#fde047";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
     ctx.fillStyle = "#ffffff";
-    centerText(ctx, `🚪 ${p.label}`, sx, sy - 4 * l.scale);
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = isHover ? 0 : 3;
+    centerText(ctx, text, cx, ty);
+    ctx.shadowBlur = 0;
   }
 }
 
