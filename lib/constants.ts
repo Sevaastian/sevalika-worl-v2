@@ -331,7 +331,7 @@ export const ROOMS: RoomDef[] = [
     defaultFurni: [
       // Sol üst: Çok kareli Sahil Kafesi (4x3) ve oturma alanı
       f("sk_cafe", "beach_cafe", 2, 0, 1),
-      f("sk_bar", "tiki_bar", 0, 3, 0),
+      f("sk_bar", "tiki_bar", 0, 3, 1),
       f("sk4", "table", 7, 2),
       f("sk5", "chair", 6, 2),
       f("sk6", "chair", 8, 2),
@@ -420,7 +420,7 @@ export const ROOMS: RoomDef[] = [
       f("v14", "lounger", 5, 11),
       f("v15", "umbrella", 4, 7),
       f("v16", "umbrella", 4, 11),
-      f("v17", "tiki_bar", 13, 2, 0),
+      f("v17", "tiki_bar", 13, 2, 1),
       f("v18", "chair", 13, 4),
       f("v19", "chair", 14, 4),
       f("v20", "lamp", 6, 2),
