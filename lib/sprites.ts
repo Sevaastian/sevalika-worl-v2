@@ -37,7 +37,7 @@ export const FURNI_SPRITES: Partial<Record<FurniType, SpriteMeta>> = {
   mannequin: { src: "/sprites/mannequin.png", wTiles: 1, hTiles: 1, drawW: 27, drawH: 61, offsetX: 0, offsetY: 7 },
   bed: { src: "/sprites/bed.png", wTiles: 2, hTiles: 1, drawW: 90, drawH: 76, offsetX: -2, offsetY: 11 },
   bus_stop: { src: "/sprites/bus_stop.png", wTiles: 3, hTiles: 1, drawW: 122, drawH: 115, offsetX: 2, offsetY: 10 },
-  phone_booth: { src: "/sprites/phone_booth.png", wTiles: 1, hTiles: 1, drawW: 43, drawH: 65, offsetX: 0, offsetY: 10 },
+  phone_booth: { src: "/sprites/phone_booth.png", wTiles: 1, hTiles: 1, drawW: 68, drawH: 104, offsetX: 0, offsetY: 10 },
   casino_bar: { src: "/sprites/casino_bar.png", wTiles: 4, hTiles: 2, drawW: 175, drawH: 137, offsetX: 4, offsetY: 9 },
   kitchen_block: { src: "/sprites/kitchen_block.png", wTiles: 4, hTiles: 2, drawW: 171, drawH: 137, offsetX: 6, offsetY: 7 },
   barn: { src: "/sprites/barn.png", wTiles: 4, hTiles: 3, drawW: 207, drawH: 153, offsetX: -4, offsetY: 11 },
@@ -64,7 +64,7 @@ export const FURNI_SPRITES: Partial<Record<FurniType, SpriteMeta>> = {
   logseat: { src: "/sprites/logseat.png", wTiles: 1, hTiles: 1, drawW: 48, drawH: 34, offsetX: 0, offsetY: 12 },
   beanbag: { src: "/sprites/beanbag.png", wTiles: 1, hTiles: 1, drawW: 46, drawH: 38, offsetX: -1, offsetY: 12 },
   surfboard: { src: "/sprites/surfboard.png", wTiles: 1, hTiles: 1, drawW: 23, drawH: 58, offsetX: 0, offsetY: 6 },
-  fountain: { src: "/sprites/fountain.png", wTiles: 1, hTiles: 1, drawW: 51, drawH: 54, offsetX: 0, offsetY: 13 },
+  fountain: { src: "/sprites/fountain.png", wTiles: 1, hTiles: 1, drawW: 96, drawH: 102, offsetX: 0, offsetY: 13 },
   streetlight: { src: "/sprites/streetlight.png", wTiles: 1, hTiles: 1, drawW: 30, drawH: 118, offsetY: 4 },
   bench: { src: "/sprites/bench.png", wTiles: 1, hTiles: 1, drawW: 76, drawH: 56, offsetY: -2 },
 };
