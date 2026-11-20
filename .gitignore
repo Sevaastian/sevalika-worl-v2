@@ -1,0 +1,14 @@
+# bağımlılıklar
+/node_modules
+# next.js
+/.next/
+/out/
+next-env.d.ts
+# ortam değişkenleri (anahtarlarını ASLA commit'leme)
+.env
+.env*.local
+# diğer
+.vercel
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*

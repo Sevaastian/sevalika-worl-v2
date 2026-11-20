@@ -1,0 +1,62 @@
+{
+ "fish_hut": {
+  "drawW": 152,
+  "drawH": 115,
+  "offsetX": -1,
+  "offsetY": 7
+ },
+ "mine_entrance": {
+  "drawW": 170,
+  "drawH": 155,
+  "offsetX": -3,
+  "offsetY": 13
+ },
+ "ore_cart": {
+  "drawW": 47,
+  "drawH": 41,
+  "offsetX": -1,
+  "offsetY": 12
+ },
+ "bus_stop": {
+  "drawW": 122,
+  "drawH": 115,
+  "offsetX": 2,
+  "offsetY": 10
+ },
+ "phone_booth": {
+  "drawW": 43,
+  "drawH": 65,
+  "offsetX": 0,
+  "offsetY": 10
+ },
+ "store_fashion": {
+  "drawW": 161,
+  "drawH": 139,
+  "offsetX": 11,
+  "offsetY": -1
+ },
+ "store_tech": {
+  "drawW": 161,
+  "drawH": 139,
+  "offsetX": 11,
+  "offsetY": -1
+ },
+ "store_food": {
+  "drawW": 161,
+  "drawH": 139,
+  "offsetX": 11,
+  "offsetY": -1
+ },
+ "mannequin": {
+  "drawW": 27,
+  "drawH": 61,
+  "offsetX": 0,
+  "offsetY": 7
+ },
+ "bed": {
+  "drawW": 90,
+  "drawH": 76,
+  "offsetX": -2,
+  "offsetY": 11
+ }
+}
