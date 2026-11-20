@@ -245,9 +245,10 @@ function drawStreetFacades(ctx: Ctx, l: Layout, time: number) {
     drawRightWallSign(ctx, l, gxStart, gxEnd, title, signBg, "#ffffff", 92);
   };
 
-  drawStorefront(2, 8, "#3f2e3e", "#e11d48", "#f8fafc", "☕ MEYDAN KAFE", "#be123c");
-  drawStorefront(10, 15, "#1e3a5f", "#db2777", "#fef08a", "🎲 OYUNİKA ARENA", "#9d174d");
-  drawStorefront(16, 21, "#3b1d36", "#9333ea", "#facc15", "🎰 MONAKO VIP", "#6b21a8");
+    drawStorefront(1, 7, "#3f2e3e", "#e11d48", "#f8fafc", "☕ MEYDAN KAFE", "#be123c");
+  drawStorefront(7, 13, "#4c1d95", "#a855f7", "#fde68a", "🛍️ SEVALİKA AVM", "#7c3aed");
+  drawStorefront(13, 18, "#1e3a5f", "#db2777", "#fef08a", "🎲 OYUNİKA ARENA", "#9d174d");
+  drawStorefront(18, 22, "#3b1d36", "#9333ea", "#facc15", "🎰 MONAKO VIP", "#6b21a8");
 
   const g1 = gridToScreen(0, 4, l);
   const g2 = gridToScreen(0, 8, l);
@@ -658,9 +659,9 @@ function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): Tile
   const base: TileStyle = { a: theme.floorA, b: theme.floorB, kind: "plain", edge: "#00000030" };
   switch (slug) {
     case "cadde-1":
-      if (gy <= 2 || gy === 9) return { a: "#e8dbc2", b: "#dccdb0", kind: "brick", edge: "#8a7a5c55" };
-      if (gy >= 3 && gy <= 8) return { a: "#6f7683", b: "#676e7b", kind: "asphalt", edge: "#3a3f4a55" };
-      if (gx >= 10 && gx <= 12) return { a: "#efe3cb", b: "#e2d4b8", kind: "brick", edge: "#8a7a5c55" };
+       if (gy <= 3 || gy === 8 || gy === 9) return { a: "#e8dbc2", b: "#dccdb0", kind: "brick", edge: "#8a7a5c55" };
+      if (gy >= 4 && gy <= 7) return { a: "#6f7683", b: "#676e7b", kind: "asphalt", edge: "#3a3f4a55" };
+      if (gx >= 8 && gx <= 14 && gy <= 13) return { a: "#efe3cb", b: "#e2d4b8", kind: "brick", edge: "#8a7a5c55" };
       return { a: "#74c04f", b: "#68b448", kind: "grass", edge: "#3f7a2a44" };
     case "avm":
       if (gx >= 12 && gx <= 15) return { a: "#c4b5fd", b: "#b9a8f5", kind: "carpet", edge: "#6d28d955" };
@@ -823,7 +824,7 @@ function drawStyledTile(
   }
 
   // Cadde: yaya geçidi, şerit çizgileri, bordür
-  if (slug === "cadde-1" && gy >= 3 && gy <= 8) {
+  if (slug === "cadde-1" && gy >= 4 && gy <= 7) {
     if (gx === 10 || gx === 11) {
       tilePath(ctx, sx, sy, l, 5 * s);
       ctx.fillStyle = "rgba(250, 250, 250, 0.82)";
@@ -836,11 +837,11 @@ function drawStyledTile(
       ctx.lineTo(sx + hw * 0.4, cy + hh * 0.9);
       ctx.stroke();
     }
-    if (gy === 3 || gy === 8) {
+    if (gy === 4 || gy === 7) {
       ctx.strokeStyle = "rgba(241, 245, 249, 0.8)";
       ctx.lineWidth = Math.max(1.2, 1.6 * s);
       ctx.beginPath();
-      if (gy === 3) {
+      if (gy === 4) {
         ctx.moveTo(sx - hw + 1.5 * s, cy);
         ctx.lineTo(sx, sy + 1.2 * s);
       } else {
