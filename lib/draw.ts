@@ -245,7 +245,7 @@ function drawStreetFacades(ctx: Ctx, l: Layout, time: number) {
     drawRightWallSign(ctx, l, gxStart, gxEnd, title, signBg, "#ffffff", 92);
   };
 
-    drawStorefront(1, 7, "#3f2e3e", "#e11d48", "#f8fafc", "☕ MEYDAN KAFE", "#be123c");
+  drawStorefront(1, 7, "#3f2e3e", "#e11d48", "#f8fafc", "☕ MEYDAN KAFE", "#be123c");
   drawStorefront(7, 13, "#4c1d95", "#a855f7", "#fde68a", "🛍️ SEVALİKA AVM", "#7c3aed");
   drawStorefront(13, 18, "#1e3a5f", "#db2777", "#fef08a", "🎲 OYUNİKA ARENA", "#9d174d");
   drawStorefront(18, 22, "#3b1d36", "#9333ea", "#facc15", "🎰 MONAKO VIP", "#6b21a8");
@@ -659,7 +659,7 @@ function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): Tile
   const base: TileStyle = { a: theme.floorA, b: theme.floorB, kind: "plain", edge: "#00000030" };
   switch (slug) {
     case "cadde-1":
-       if (gy <= 3 || gy === 8 || gy === 9) return { a: "#e8dbc2", b: "#dccdb0", kind: "brick", edge: "#8a7a5c55" };
+            if (gy <= 3 || gy === 8 || gy === 9) return { a: "#e8dbc2", b: "#dccdb0", kind: "brick", edge: "#8a7a5c55" };
       if (gy >= 4 && gy <= 7) return { a: "#6f7683", b: "#676e7b", kind: "asphalt", edge: "#3a3f4a55" };
       if (gx >= 8 && gx <= 14 && gy <= 13) return { a: "#efe3cb", b: "#e2d4b8", kind: "brick", edge: "#8a7a5c55" };
       return { a: "#74c04f", b: "#68b448", kind: "grass", edge: "#3f7a2a44" };
