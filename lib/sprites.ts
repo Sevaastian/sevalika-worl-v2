@@ -36,7 +36,7 @@ export const FURNI_SPRITES: Partial<Record<FurniType, SpriteMeta>> = {
   store_food: { src: "/sprites/store_food.png", wTiles: 4, hTiles: 2, drawW: 161, drawH: 139, offsetX: 11, offsetY: -1 },
   mannequin: { src: "/sprites/mannequin.png", wTiles: 1, hTiles: 1, drawW: 27, drawH: 61, offsetX: 0, offsetY: 7 },
   bed: { src: "/sprites/bed.png", wTiles: 2, hTiles: 1, drawW: 90, drawH: 76, offsetX: -2, offsetY: 11 },
-  clock_tower: { src: "/sprites/clock_tower.png", wTiles: 2, hTiles: 2, drawW: 85, drawH: 210, offsetX: 0, offsetY: 16 },
+  clock_tower: { src: "/sprites/clock_tower.png", wTiles: 2, hTiles: 2, drawW: 95, drawH: 210, offsetX: 0, offsetY: 16 },
   fountain_big: { src: "/sprites/fountain_big.png", wTiles: 3, hTiles: 3, drawW: 123, drawH: 109, offsetX: 0, offsetY: -1 },
   food_truck: { src: "/sprites/food_truck.png", wTiles: 3, hTiles: 2, drawW: 154, drawH: 118, offsetX: -2, offsetY: 14 },
   stall_red: { src: "/sprites/stall_red.png", wTiles: 2, hTiles: 1, drawW: 112, drawH: 110, offsetX: -2, offsetY: 18 },
