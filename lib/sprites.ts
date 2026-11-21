@@ -46,7 +46,7 @@ export const FURNI_SPRITES: Partial<Record<FurniType, SpriteMeta>> = {
   car_blue: { src: "/sprites/car_blue.png", wTiles: 2, hTiles: 1, drawW: 81, drawH: 67, offsetX: 0, offsetY: 10 },
   car_yellow: { src: "/sprites/car_yellow.png", wTiles: 2, hTiles: 1, drawW: 81, drawH: 67, offsetX: 0, offsetY: 10 },
   flower_bed: { src: "/sprites/flower_bed.png", wTiles: 3, hTiles: 1, drawW: 116, drawH: 68, offsetX: 0, offsetY: 13 },
-  bus_stop: { src: "/sprites/bus_stop.png", wTiles: 3, hTiles: 1, drawW: 122, drawH: 115, offsetX: 2, offsetY: 10 },
+  bus_stop: { src: "/sprites/bus_stop.png", wTiles: 3, hTiles: 1, drawW: 132, drawH: 108, offsetX: 4, offsetY: 14 },
   phone_booth: { src: "/sprites/phone_booth.png", wTiles: 1, hTiles: 1, drawW: 43, drawH: 65, offsetX: 0, offsetY: 10 },
   casino_bar: { src: "/sprites/casino_bar.png", wTiles: 4, hTiles: 2, drawW: 175, drawH: 137, offsetX: 4, offsetY: 9 },
   kitchen_block: { src: "/sprites/kitchen_block.png", wTiles: 4, hTiles: 2, drawW: 171, drawH: 137, offsetX: 6, offsetY: 7 },
