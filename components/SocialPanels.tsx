@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { GUIDE_TOPICS, HOME_SALE_SIZES, HOME_TIERS, homeExpandPrice, COSMETIC_BY_ID, COSMETICS, FURNI_BY_TYPE, HOME_FLOORS, HOME_WALLS, ROOM_BY_SLUG, type BundleDef, type CosmeticSlot } from "@/lib/constants";
-import type { ActiveQuiz, Friend, HomeAccess, Profile } from "@/lib/types";
+import type { ActiveQuiz, Friend, HomeAccess, PopularHome, Profile } from "@/lib/types";
 import RoleBadge from "./RoleBadge";
 
 const closeBtn = "text-slate-400 hover:text-white text-xs px-1.5 py-0.5 rounded bg-slate-800";
@@ -375,8 +375,9 @@ export function BundleShopPanel(props: { kind: "furni" | "outfit"; bundles: Bund
 }
 
 /** Emlak Ofisi: Emlakçı Orhan ev satar. */
-export function RealtorPanel(props: { profile: Profile; homeSize: number | null; onClose: () => void; onBuy: (size: number) => void; onGoHome: () => void }) {
+export function RealtorPanel(props: { profile: Profile; homeSize: number | null; popular: PopularHome[]; onClose: () => void; onBuy: (size: number) => void; onGoHome: () => void; onVisit: (slug: string) => void }) {
   const p = props.profile;
+  const [tab, setTab] = useState<"sale" | "popular">("sale");
   const isAdmin = p.role === "admin";
   return (
     <div className="bg-slate-900/95 backdrop-blur border border-teal-400/50 p-3.5 rounded-2xl w-64 md:w-72 space-y-2.5 shadow-2xl max-h-[75vh] overflow-y-auto">
@@ -386,7 +387,31 @@ export function RealtorPanel(props: { profile: Profile; homeSize: number | null;
           ✕
         </button>
       </div>
-      {props.homeSize !== null ? (
+      <div className="flex gap-1">
+        {([["sale", "🏷️ Satılık"], ["popular", "🔥 Popüler Evler"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 text-[11px] font-bold py-1 rounded-lg border ${tab === k ? "bg-teal-400 text-slate-950 border-teal-300" : "bg-slate-800 text-slate-300 border-slate-700"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {tab === "popular" ? (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-slate-400">En çok beğenilen açık evler. Ziyaret edip beğenebilirsin!</p>
+          {props.popular.length === 0 && <p className="text-[11px] text-slate-500">Henüz açık ev yok.</p>}
+          {props.popular.map((h, i) => (
+            <div key={h.slug} className="bg-slate-800/70 rounded-xl p-2 flex items-center gap-2">
+              <span className="text-sm font-black text-amber-300 w-5 text-center">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-black text-slate-100 truncate">{h.owner} Odası</div>
+                <div className="text-[10px] text-slate-400">{h.size}x{h.size} · ❤️ {h.likes}</div>
+              </div>
+              <button onClick={() => props.onVisit(h.slug)} className="text-[11px] font-black px-2 py-1 rounded-lg bg-teal-400 text-slate-950">
+                Ziyaret
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : props.homeSize !== null ? (
         <div className="space-y-2">
           <p className="text-[11px] text-slate-300 leading-snug">
             Zaten <b className="text-teal-300">{props.homeSize}x{props.homeSize}</b> bir evin var. Büyütmek için evine gidip <b>Düzenle</b> moduna gir, <b>Evi Genişlet</b> bölümünden büyüt.

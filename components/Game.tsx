@@ -57,6 +57,7 @@ import type {
   Player,
   Profile,
   BadgeState,
+  PopularHome,
   ProfileCard,
   PublicProfile,
   Quest,
@@ -155,6 +156,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   const [rotation, setRotation] = useState(0);
   const [selected, setSelected] = useState<{ name: string; role: UserRole } | null>(null);
   const [activeNpc, setActiveNpc] = useState<NpcKind | null>(null);
+  const [popularHomes, setPopularHomes] = useState<PopularHome[]>([]);
   const [badgeState, setBadgeState] = useState<BadgeState | null>(null);
   const [myHomeSize, setMyHomeSize] = useState<number | null>(null);
   const [roomStyle, setRoomStyle] = useState<{ wall: string; floor: string; likes: number; size: number } | null>(null);
@@ -1258,7 +1260,10 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         setPanel(null);
         setActiveNpc(hit.npcKind);
         if (hit.npcKind === "farmer") void loadFarm();
-        if (hit.npcKind === "realtor") void backend.getMyHomeSize().then(setMyHomeSize).catch(() => {});
+        if (hit.npcKind === "realtor") {
+          void backend.getMyHomeSize().then(setMyHomeSize).catch(() => {});
+          void backend.popularHomes().then(setPopularHomes).catch(() => {});
+        }
         if (hit.npcKind === "dealer") void backend.bjState().then(setBj).catch(() => {});
         return;
       }
@@ -2272,7 +2277,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           {panel === "shop" && <ShopPanel mode="wardrobe" profile={profile} onClose={() => setPanel(null)} onBuy={buyCosmetic} onEquip={equipCosmetic} />}
           {activeNpc === "stylist" && <ShopPanel mode="shop" slots={["hat", "glasses", "top"]} profile={profile} onClose={() => setActiveNpc(null)} onBuy={buyCosmetic} onEquip={equipCosmetic} />}
           {activeNpc === "barber" && <ShopPanel mode="shop" slots={["hair"]} title="✂️ KUAFÖR SELİN · SAÇ STİLLERİ" profile={profile} onClose={() => setActiveNpc(null)} onBuy={buyCosmetic} onEquip={equipCosmetic} />}
-          {activeNpc === "realtor" && <RealtorPanel profile={profile} homeSize={myHomeSize} onClose={() => setActiveNpc(null)} onBuy={buyHome} onGoHome={() => { setActiveNpc(null); goHome(); }} />}
+          {activeNpc === "realtor" && <RealtorPanel profile={profile} homeSize={myHomeSize} popular={popularHomes} onClose={() => setActiveNpc(null)} onBuy={buyHome} onGoHome={() => { setActiveNpc(null); goHome(); }} onVisit={(slug) => { setActiveNpc(null); void changeRoom(slug); }} />}
           {activeNpc === "guide" && <GuidePanel profile={profile} onClose={() => setActiveNpc(null)} onGift={claimGuideGift} />}
           {activeNpc === "furnisher" && <BundleShopPanel kind="furni" bundles={FURNI_BUNDLES} profile={profile} onClose={() => setActiveNpc(null)} onBuy={buyBundle} />}
           {activeNpc === "costume" && <BundleShopPanel kind="outfit" bundles={OUTFIT_BUNDLES} profile={profile} onClose={() => setActiveNpc(null)} onBuy={buyBundle} />}

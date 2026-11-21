@@ -938,6 +938,19 @@ begin
   return jsonb_build_object('coins', new_coins, 'size', p_size, 'price', price);
 end $$;
 
+-- Popüler Evler panosu: en çok beğenilen açık evler
+create or replace function public.popular_homes() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles;
+begin
+  me := public._me();
+  return coalesce((select jsonb_agg(x) from (
+    select jsonb_build_object('slug', r.slug, 'owner', p.username, 'size', r.cols, 'likes', r.like_count) as x
+      from public.rooms r join public.profiles p on p.id = r.owner_id
+     where r.owner_id is not null and r.access = 'open'
+     order by r.like_count desc, r.updated_at desc limit 10) t), '[]'::jsonb);
+end $$;
+
 -- Rehber Yağmur'dan tek seferlik hoş geldin hediyesi
 create or replace function public.claim_guide_gift() returns jsonb
 language plpgsql security definer set search_path = '' as $$
@@ -2620,7 +2633,7 @@ begin
                          'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni',
                          'admin_set_role','admin_gift','admin_kick','admin_announce','admin_dance','admin_clear_room',
                          'send_chat','roll_dice','heartbeat','friend_request','friend_respond','friend_remove','get_friends',
-                         'gift_coins','gift_item','buy_cosmetic','buy_bundle','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
+                         'gift_coins','gift_item','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
                          'admin_start_quiz','answer_quiz','admin_mute','admin_unmute','admin_ban','admin_unban',
                          'report_player','admin_list_reports','admin_close_report','admin_get_log',
                          'fish_price','buy_fishing_rod','equip_tool','catch_fish','sell_fish',
@@ -2659,6 +2672,7 @@ grant execute on function public.buy_cosmetic(text)                             
 grant execute on function public.buy_bundle(text)                               to authenticated;
 grant execute on function public.buy_home(int)                                  to authenticated;
 grant execute on function public.get_badges()                                   to authenticated;
+grant execute on function public.popular_homes()                                to authenticated;
 grant execute on function public.buy_badge(text)                                to authenticated;
 grant execute on function public.expand_home(int)                               to authenticated;
 grant execute on function public.claim_guide_gift()                             to authenticated;

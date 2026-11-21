@@ -198,3 +198,8 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Eski başarımlar artık +50 Sanil veriyor.
 - Sunucu: `badge_progress`, `user_badges`, `_badge_add`, `_badge_grant`, `get_badges`, `buy_badge`, `badge_price`; `get_profile_card` rozetleri döndürür.
 - Uygulama: `supabase/schema.sql` yeniden çalıştır + redeploy.
+
+## v17 — Popüler Evler
+- Emlak Ofisi'nde Emlakçı Orhan'ın panelinde yeni **🔥 Popüler Evler** sekmesi: en çok beğenilen 10 açık ev, **Ziyaret** düğmesiyle ışınlanma.
+- Sunucu: `popular_homes()` (sadece `access = 'open'` evler).
+- Uygulama: `supabase/schema.sql` yeniden çalıştır + redeploy.

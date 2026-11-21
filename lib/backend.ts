@@ -49,6 +49,7 @@ import type {
   Listing,
   Profile,
   BadgeState,
+  PopularHome,
   ProfileCard,
   PublicProfile,
   Quest,
@@ -86,6 +87,7 @@ export interface Backend {
   getMyHomeSize(): Promise<number | null>;
   claimGuideGift(): Promise<{ coins: number; reward: number }>;
   getBadges(): Promise<BadgeState>;
+  popularHomes(): Promise<PopularHome[]>;
   buyBadge(key: string): Promise<{ coins: number; key: string }>;
   setHomeStyle(wall: string, floor: string): Promise<number>;
   likeHome(slug: string): Promise<number>;
@@ -388,6 +390,7 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
     },
     claimGuideGift: () => rpc("claim_guide_gift"),
     getBadges: () => rpc("get_badges"),
+    popularHomes: () => rpc("popular_homes"),
     buyBadge: (key) => rpc("buy_badge", { p_key: key }),
     async setHomeStyle(wall, floor) {
       const r = await rpc<{ coins: number }>("set_home_style", { p_wall: wall, p_floor: floor });
@@ -892,6 +895,15 @@ function createDemoBackend(): Backend {
     },
     async getBadges() {
       return badgeState();
+    },
+    async popularHomes() {
+      const list: PopularHome[] = [
+        { slug: "home-cemre", owner: "Cemre", size: 8, likes: 42 },
+        { slug: "home-deniz", owner: "Deniz", size: 12, likes: 17 },
+      ];
+      const p = need();
+      if (demoHomeSize !== null) list.push({ slug: homeSlug(p.username), owner: p.username, size: demoHomeSize, likes: homeLikes.get(homeSlug(p.username)) ?? 0 });
+      return list.sort((a, b) => b.likes - a.likes);
     },
     async buyBadge(key) {
       const p = need();

@@ -292,6 +292,13 @@ export interface ProfileCard {
   badges?: BadgeState;
 }
 
+export interface PopularHome {
+  slug: string;
+  owner: string;
+  size: number;
+  likes: number;
+}
+
 export interface BadgeState {
   tiers: { key: string; count: number; tier: number }[];
   owned: string[];
