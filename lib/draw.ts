@@ -1271,7 +1271,7 @@ export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.ellipse(sx + ox, footY - 2 * l.scale, w * 0.34, h * 0.11, 0, 0, Math.PI * 2);
       ctx.fill();
 
-     if (item.rot === 1) {
+      if (item.rot === 1 && wTiles === 1 && hTiles === 1 && def?.sittable) {
         // Döndürülmüş oturaklar: sprite'ı yatay çevir (güneybatıya baksın)
         ctx.save();
         ctx.translate(sx, 0);
