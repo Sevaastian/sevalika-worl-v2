@@ -1243,8 +1243,10 @@ export function drawRug(ctx: Ctx, item: FurniItem, l: Layout) {
 export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const def = FURNI_BY_TYPE[item.type];
   const spriteMeta = FURNI_SPRITES[item.type];
-  const wTiles = spriteMeta?.wTiles ?? def?.wTiles ?? 1;
-  const hTiles = spriteMeta?.hTiles ?? def?.hTiles ?? 1;
+  const baseW = spriteMeta?.wTiles ?? def?.wTiles ?? 1;
+  const baseH = spriteMeta?.hTiles ?? def?.hTiles ?? 1;
+  const wTiles = item.rot === 1 ? baseH : baseW;
+  const hTiles = item.rot === 1 ? baseW : baseH;
 
   // Çok kareli yapılarda görselin taban merkezini kapladığı karelerin ortasına oturturuz
   const centerGx = item.gx + (wTiles - 1) / 2;
@@ -1260,6 +1262,8 @@ export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       const ox = (spriteMeta.offsetX ?? 0) * l.scale;
       const oy = (spriteMeta.offsetY ?? 6) * l.scale;
       const footY = sy + l.tileH * ((wTiles + hTiles) / 4);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
 
       // Yumuşak temas gölgesi (Ambient Occlusion)
       ctx.fillStyle = "rgba(0, 0, 0, 0.28)";

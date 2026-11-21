@@ -203,3 +203,12 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Emlak Ofisi'nde Emlakçı Orhan'ın panelinde yeni **🔥 Popüler Evler** sekmesi: en çok beğenilen 10 açık ev, **Ziyaret** düğmesiyle ışınlanma.
 - Sunucu: `popular_homes()` (sadece `access = 'open'` evler).
 - Uygulama: `supabase/schema.sql` yeniden çalıştır + redeploy.
+
+- v17 düzeltme: eski şemalı `friendships` tablosu (requester sütunu yok) otomatik `friendships_old_backup` olarak yedeklenip yeniden kurulur (profil kartındaki "column f.requester does not exist" hatası).
+
+## v18 — Sprite kalitesi, döndürme, rehber
+- Büyük PNG'ler yüklenirken ekran boyutuna kademeli küçültülür (daha net), çizimde `imageSmoothingQuality = "high"`.
+- **Döndürme:** `rot = 1` artık görseli aynalar ve çok kareli eşyanın kapladığı kareleri yer değiştirir (istemci + sunucu `_fw/_fh`, `_tile_free/_check_place` p_rot).
+- Sprite meta değerleri (saat kulesi 2x2, yemek aracı 3x2, tezgah, durak, kulübe) kullanıcının ayarlarıyla eşitlendi; sunucu boyutları güncellendi.
+- **Düzeltme:** Admin "tüm eşyaları kaldır" sonrası odanın varsayılan yerleşimi geri gelmiyor (boş satır artık geçerli).
+- `docs/SPRITE-REHBERI.md`: görsel boyutları, yön, kod tanıtma, karakter katmanları.

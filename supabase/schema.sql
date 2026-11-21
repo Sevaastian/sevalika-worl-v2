@@ -118,6 +118,17 @@ create table if not exists public.user_events (
 );
 create index if not exists user_events_target_idx on public.user_events (target_id, created_at desc);
 
+-- Eski/farklı şemalı friendships tablosu varsa (requester sütunu yoksa) yedeğe al, yenisini kur.
+do $$
+begin
+  if to_regclass('public.friendships') is not null
+     and not exists (select 1 from information_schema.columns
+                      where table_schema = 'public' and table_name = 'friendships' and column_name = 'requester') then
+    drop table if exists public.friendships_old_backup;
+    alter table public.friendships rename to friendships_old_backup;
+  end if;
+end $$;
+
 create table if not exists public.friendships (
   requester  uuid not null references public.profiles(id) on delete cascade,
   addressee  uuid not null references public.profiles(id) on delete cascade,
@@ -232,10 +243,10 @@ $$;
 -- v6: çok kareli eşyalar (sol-üst köşe + genişlik/yükseklik)
 create or replace function public._furni_w(p_type text) returns int
 language sql immutable set search_path = '' as $$
-  select case p_type when 'beach_cafe' then 4 when 'dj_booth' then 3 when 'tiki_bar' then 2 when 'casino_bar' then 4 when 'kitchen_block' then 4 when 'barn' then 4 when 'fish_hut' then 3 when 'mine_entrance' then 4 when 'bus_stop' then 3 when 'store_fashion' then 4 when 'store_tech' then 4 when 'store_food' then 4 when 'bed' then 2 when 'fountain_big' then 3 when 'food_truck' then 3 when 'stall_red' then 2 when 'stall_blue' then 2 when 'billboard' then 3 when 'car_red' then 2 when 'car_blue' then 2 when 'car_yellow' then 2 when 'flower_bed' then 3 else 1 end $$;
+  select case p_type when 'beach_cafe' then 4 when 'dj_booth' then 3 when 'tiki_bar' then 2 when 'casino_bar' then 4 when 'kitchen_block' then 4 when 'barn' then 4 when 'fish_hut' then 3 when 'mine_entrance' then 4 when 'bus_stop' then 3 when 'store_fashion' then 4 when 'store_tech' then 4 when 'store_food' then 4 when 'bed' then 2 when 'fountain_big' then 3 when 'clock_tower' then 2 when 'food_truck' then 3 when 'stall_red' then 2 when 'stall_blue' then 2 when 'billboard' then 3 when 'car_red' then 2 when 'car_blue' then 2 when 'car_yellow' then 2 when 'flower_bed' then 3 else 1 end $$;
 create or replace function public._furni_h(p_type text) returns int
 language sql immutable set search_path = '' as $$
-  select case p_type when 'beach_cafe' then 3 when 'dj_booth' then 2 when 'tiki_bar' then 2 when 'casino_bar' then 2 when 'kitchen_block' then 2 when 'barn' then 3 when 'fish_hut' then 2 when 'mine_entrance' then 2 when 'bus_stop' then 1 when 'store_fashion' then 2 when 'store_tech' then 2 when 'store_food' then 2 when 'fountain_big' then 3 else 1 end $$;
+  select case p_type when 'beach_cafe' then 3 when 'dj_booth' then 2 when 'tiki_bar' then 2 when 'casino_bar' then 2 when 'kitchen_block' then 2 when 'barn' then 3 when 'fish_hut' then 2 when 'mine_entrance' then 2 when 'bus_stop' then 1 when 'store_fashion' then 2 when 'store_tech' then 2 when 'store_food' then 2 when 'fountain_big' then 3 when 'clock_tower' then 2 when 'food_truck' then 2 else 1 end $$;
 
 -- v6: sunucu tarafı su karesi kuralı (lib/constants.ts isWaterTile ile aynı)
 create or replace function public._is_water(p_room text, p_gx int, p_gy int) returns boolean
@@ -351,36 +362,45 @@ end $$;
 -- ---------- Oda / eşya RPC'leri ----------------------------------------
 
 -- Ortak: eşya yerleştirme doğrulaması. Aynı karede (rug hariç) tek eşya olabilir.
-create or replace function public._tile_free(p_furni jsonb, p_type text, p_gx int, p_gy int) returns boolean
+-- v18: döndürülmüş (rot=1) eşyalarda genişlik/derinlik yer değiştirir
+create or replace function public._fw(p_type text, p_rot int) returns int
 language sql immutable set search_path = '' as $$
-  -- v6: kapladığı tüm kareler çakışma için kontrol edilir (halı yalnızca halıyla çakışır)
+  select case when p_rot = 1 then public._furni_h(p_type) else public._furni_w(p_type) end $$;
+create or replace function public._fh(p_type text, p_rot int) returns int
+language sql immutable set search_path = '' as $$
+  select case when p_rot = 1 then public._furni_w(p_type) else public._furni_h(p_type) end $$;
+
+drop function if exists public._tile_free(jsonb, text, int, int);
+create or replace function public._tile_free(p_furni jsonb, p_type text, p_gx int, p_gy int, p_rot int default 0) returns boolean
+language sql immutable set search_path = '' as $$
   select not exists (
     select 1 from jsonb_array_elements(p_furni) f
-    where (f->>'gx')::int < p_gx + public._furni_w(p_type)
-      and p_gx < (f->>'gx')::int + public._furni_w(f->>'type')
-      and (f->>'gy')::int < p_gy + public._furni_h(p_type)
-      and p_gy < (f->>'gy')::int + public._furni_h(f->>'type')
+    where (f->>'gx')::int < p_gx + public._fw(p_type, p_rot)
+      and p_gx < (f->>'gx')::int + public._fw(f->>'type', coalesce((f->>'rot')::int, 0))
+      and (f->>'gy')::int < p_gy + public._fh(p_type, p_rot)
+      and p_gy < (f->>'gy')::int + public._fh(f->>'type', coalesce((f->>'rot')::int, 0))
       and ((f->>'type' = 'rug') = (p_type = 'rug'))
   )
 $$;
 
 -- v6: yerleştirme doğrulaması: oda sınırı (kaplanan tüm kareler), su, çakışma
-create or replace function public._check_place(p_room text, p_furni jsonb, p_type text, p_gx int, p_gy int) returns void
+drop function if exists public._check_place(text, jsonb, text, int, int);
+create or replace function public._check_place(p_room text, p_furni jsonb, p_type text, p_gx int, p_gy int, p_rot int default 0) returns void
 language plpgsql stable set search_path = '' as $$
 declare c int; r int; x int; y int;
 begin
   select cols, rows into c, r from public.rooms where slug = p_room;
   if c is null then raise exception 'Oda bulunamadı.'; end if;
   if p_gx is null or p_gy is null or p_gx < 0 or p_gy < 0
-     or p_gx + public._furni_w(p_type) > c or p_gy + public._furni_h(p_type) > r then
+     or p_gx + public._fw(p_type, p_rot) > c or p_gy + public._fh(p_type, p_rot) > r then
     raise exception 'Geçersiz kare.';
   end if;
-  for x in p_gx .. p_gx + public._furni_w(p_type) - 1 loop
-    for y in p_gy .. p_gy + public._furni_h(p_type) - 1 loop
+  for x in p_gx .. p_gx + public._fw(p_type, p_rot) - 1 loop
+    for y in p_gy .. p_gy + public._fh(p_type, p_rot) - 1 loop
       if public._is_water(p_room, x, y) then raise exception 'Denize eşya konamaz.'; end if;
     end loop;
   end loop;
-  if not public._tile_free(p_furni, p_type, p_gx, p_gy) then raise exception 'Bu kare dolu.'; end if;
+  if not public._tile_free(p_furni, p_type, p_gx, p_gy, p_rot) then raise exception 'Bu kare dolu.'; end if;
 end $$;
 
 -- Eşya satın al ve odaya koy. Admin için ücretsiz.
@@ -396,7 +416,7 @@ begin
   if public.role_rank(me.role) < public.role_rank(r.min_role) then raise exception 'Bu odaya erişimin yok.'; end if;
   if r.owner_id is not null and r.owner_id <> me.id and me.role <> 'admin' then raise exception 'Bu oda sana ait değil.'; end if;
   if jsonb_array_length(r.furni) >= 80 then raise exception 'Oda dolu (en fazla 80 eşya).'; end if;
-  perform public._check_place(p_room, r.furni, p_type, p_gx, p_gy);
+  perform public._check_place(p_room, r.furni, p_type, p_gx, p_gy, case when p_rot = 1 then 1 else 0 end);
 
   if me.role = 'admin' then
     new_coins := me.coins;
@@ -425,7 +445,7 @@ begin
   if public.role_rank(me.role) < public.role_rank(r.min_role) then raise exception 'Bu odaya erişimin yok.'; end if;
   if r.owner_id is not null and r.owner_id <> me.id and me.role <> 'admin' then raise exception 'Bu oda sana ait değil.'; end if;
   if jsonb_array_length(r.furni) >= 80 then raise exception 'Oda dolu (en fazla 80 eşya).'; end if;
-  perform public._check_place(p_room, r.furni, p_type, p_gx, p_gy);
+  perform public._check_place(p_room, r.furni, p_type, p_gx, p_gy, case when p_rot = 1 then 1 else 0 end);
 
   new_inv := me.inventory[1:idx-1] || me.inventory[idx+1:array_length(me.inventory,1)];
   update public.profiles set inventory = coalesce(new_inv, '{}') where id = me.id;
@@ -2640,7 +2660,7 @@ begin
                          '_level','_ach','_add_xp','_quest_goal','_quest_coins','_quest_xp','_progress','get_quests','claim_quest',
                          'get_profile_card','home_style_price','set_home_style','like_home','set_status','_inv_remove','market_list_item','market_get','market_cancel','market_buy',
                          '_tournament_add','_close_tournaments','get_tournament','admin_start_tournament',
-                         '_room_spawn','report_pos','_furni_w','_furni_h','_is_water','_check_place','_in_room','_require_near','goods_price','buy_pickaxe','mine_ore','sell_goods','_crop_seconds','_crop_seed','farm_get','farm_plant','farm_harvest','cook','_guild_level','guild_get','guild_list','guild_create','guild_join','guild_leave','guild_kick','guild_donate','dice_play','_bj_total','_bj_card','_bj_view','_bj_finish','bj_state','bj_start','bj_hit','bj_stand','_close_flags','admin_start_flag','flag_grab','get_flag','_close_hides','admin_start_hide','hide_tag','get_hide')
+                         '_room_spawn','report_pos','_furni_w','_furni_h','_fw','_fh','_is_water','_check_place','_in_room','_require_near','goods_price','buy_pickaxe','mine_ore','sell_goods','_crop_seconds','_crop_seed','farm_get','farm_plant','farm_harvest','cook','_guild_level','guild_get','guild_list','guild_create','guild_join','guild_leave','guild_kick','guild_donate','dice_play','_bj_total','_bj_card','_bj_view','_bj_finish','bj_state','bj_start','bj_hit','bj_stand','_close_flags','admin_start_flag','flag_grab','get_flag','_close_hides','admin_start_hide','hide_tag','get_hide')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
   end loop;

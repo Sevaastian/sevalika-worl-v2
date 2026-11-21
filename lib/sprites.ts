@@ -38,16 +38,16 @@ export const FURNI_SPRITES: Partial<Record<FurniType, SpriteMeta>> = {
   bed: { src: "/sprites/bed.png", wTiles: 2, hTiles: 1, drawW: 90, drawH: 76, offsetX: -2, offsetY: 11 },
   clock_tower: { src: "/sprites/clock_tower.png", wTiles: 2, hTiles: 2, drawW: 85, drawH: 210, offsetX: 0, offsetY: 16 },
   fountain_big: { src: "/sprites/fountain_big.png", wTiles: 3, hTiles: 3, drawW: 123, drawH: 109, offsetX: 0, offsetY: -1 },
-  food_truck: { src: "/sprites/food_truck.png", wTiles: 3, hTiles: 1, drawW: 125, drawH: 96, offsetX: -3, offsetY: 9 },
-  stall_red: { src: "/sprites/stall_red.png", wTiles: 2, hTiles: 1, drawW: 91, drawH: 90, offsetX: 0, offsetY: 13 },
-  stall_blue: { src: "/sprites/stall_blue.png", wTiles: 2, hTiles: 1, drawW: 91, drawH: 90, offsetX: 0, offsetY: 13 },
+  food_truck: { src: "/sprites/food_truck.png", wTiles: 3, hTiles: 2, drawW: 154, drawH: 118, offsetX: -2, offsetY: 14 },
+  stall_red: { src: "/sprites/stall_red.png", wTiles: 2, hTiles: 1, drawW: 112, drawH: 110, offsetX: -2, offsetY: 18 },
+  stall_blue: { src: "/sprites/stall_blue.png", wTiles: 2, hTiles: 1, drawW: 112, drawH: 110, offsetX: 2, offsetY: 18 },
   billboard: { src: "/sprites/billboard.png", wTiles: 3, hTiles: 1, drawW: 97, drawH: 128, offsetX: 0, offsetY: 3 },
   car_red: { src: "/sprites/car_red.png", wTiles: 2, hTiles: 1, drawW: 81, drawH: 67, offsetX: 0, offsetY: 10 },
   car_blue: { src: "/sprites/car_blue.png", wTiles: 2, hTiles: 1, drawW: 81, drawH: 67, offsetX: 0, offsetY: 10 },
   car_yellow: { src: "/sprites/car_yellow.png", wTiles: 2, hTiles: 1, drawW: 81, drawH: 67, offsetX: 0, offsetY: 10 },
   flower_bed: { src: "/sprites/flower_bed.png", wTiles: 3, hTiles: 1, drawW: 116, drawH: 68, offsetX: 0, offsetY: 13 },
-  bus_stop: { src: "/sprites/bus_stop.png", wTiles: 3, hTiles: 1, drawW: 122, drawH: 115, offsetX: 2, offsetY: 10 },
-  phone_booth: { src: "/sprites/phone_booth.png", wTiles: 1, hTiles: 1, drawW: 43, drawH: 65, offsetX: 0, offsetY: 10 },
+  bus_stop: { src: "/sprites/bus_stop.png", wTiles: 3, hTiles: 1, drawW: 132, drawH: 108, offsetX: 4, offsetY: 14 },
+  phone_booth: { src: "/sprites/phone_booth.png", wTiles: 1, hTiles: 1, drawW: 52, drawH: 84, offsetX: 0, offsetY: 13 },
   casino_bar: { src: "/sprites/casino_bar.png", wTiles: 4, hTiles: 2, drawW: 175, drawH: 137, offsetX: 4, offsetY: 9 },
   kitchen_block: { src: "/sprites/kitchen_block.png", wTiles: 4, hTiles: 2, drawW: 171, drawH: 137, offsetX: 6, offsetY: 7 },
   barn: { src: "/sprites/barn.png", wTiles: 4, hTiles: 3, drawW: 207, drawH: 153, offsetX: -4, offsetY: 11 },
@@ -137,6 +137,34 @@ function trimTransparentPadding(img: HTMLImageElement): CanvasImageSource {
   }
 }
 
+/**
+ * Büyük görselleri (ör. 1248x832) ekranda çizileceği boyuta yakın bir boyuta kademeli (yarıya yarıya) küçültür.
+ * Tek adımda 10 kat küçültme bulanık/tırtıklı olur; kademeli küçültme çok daha net sonuç verir.
+ */
+function downscaleForScreen(src: CanvasImageSource & { width: number; height: number }, targetW: number): CanvasImageSource {
+  let cur: CanvasImageSource & { width: number; height: number } = src;
+  if (cur.width <= targetW * 1.05) return src;
+  try {
+    while (cur.width > targetW * 1.05) {
+      const nw = Math.max(Math.round(targetW), Math.floor(cur.width / 2));
+      const nh = Math.max(1, Math.round((cur.height * nw) / cur.width));
+      const c = document.createElement("canvas");
+      c.width = nw;
+      c.height = nh;
+      const cx = c.getContext("2d");
+      if (!cx) return cur;
+      cx.imageSmoothingEnabled = true;
+      cx.imageSmoothingQuality = "high";
+      cx.drawImage(cur, 0, 0, nw, nh);
+      cur = c;
+      if (nw <= targetW) break;
+    }
+    return cur;
+  } catch {
+    return cur;
+  }
+}
+
 class SpriteManager {
   private cache = new Map<string, CacheEntry>();
 
@@ -149,7 +177,9 @@ class SpriteManager {
       const img = new Image();
       entry = { source: null, status: "loading" };
       img.onload = () => {
-        entry!.source = trimTransparentPadding(img);
+        const trimmed = trimTransparentPadding(img) as CanvasImageSource & { width: number; height: number };
+        const meta = Object.values(FURNI_SPRITES).find((m) => m?.src === src);
+        entry!.source = meta ? downscaleForScreen(trimmed, meta.drawW * 3) : trimmed;
         entry!.status = "ready";
       };
       img.onerror = () => {

@@ -357,11 +357,12 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
     async loadRoom(slug) {
       const { data, error } = await sb.from("rooms").select("furni").eq("slug", slug).maybeSingle();
       if (error) throw new Error(error.message);
-      const list = Array.isArray(data?.furni) ? (data.furni as FurniItem[]) : [];
-      if (list.length === 0 && !isHomeSlug(slug)) {
-        return structuredClone(resolveRoom(slug)?.defaultFurni ?? []);
+      // Satır hiç yoksa (şema çalıştırılmamış) varsayılan yerleşim; satır varsa boş olsa bile o geçerlidir
+      // (admin "tüm eşyaları kaldır" yaptıysa oda gerçekten boş kalmalı).
+      if (!Array.isArray(data?.furni)) {
+        return isHomeSlug(slug) ? [] : structuredClone(resolveRoom(slug)?.defaultFurni ?? []);
       }
-      return list;
+      return data.furni as FurniItem[];
     },
     async enterRoom(slug) {
       try {

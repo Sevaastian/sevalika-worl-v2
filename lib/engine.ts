@@ -102,10 +102,10 @@ export class GameEngine {
   private getFurniFootprint(f: FurniItem): { wTiles: number; hTiles: number } {
     const def = FURNI_BY_TYPE[f.type];
     const sp = FURNI_SPRITES[f.type];
-    return {
-      wTiles: sp?.wTiles ?? def?.wTiles ?? 1,
-      hTiles: sp?.hTiles ?? def?.hTiles ?? 1,
-    };
+    const w = sp?.wTiles ?? def?.wTiles ?? 1;
+    const h = sp?.hTiles ?? def?.hTiles ?? 1;
+    // Döndürülmüş (rot=1) çok kareli eşyalarda genişlik ve derinlik yer değiştirir
+    return f.rot === 1 ? { wTiles: h, hTiles: w } : { wTiles: w, hTiles: h };
   }
 
   private blockedTiles(goal?: Tile) {
