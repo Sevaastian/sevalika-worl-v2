@@ -212,3 +212,10 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Sprite meta değerleri (saat kulesi 2x2, yemek aracı 3x2, tezgah, durak, kulübe) kullanıcının ayarlarıyla eşitlendi; sunucu boyutları güncellendi.
 - **Düzeltme:** Admin "tüm eşyaları kaldır" sonrası odanın varsayılan yerleşimi geri gelmiyor (boş satır artık geçerli).
 - `docs/SPRITE-REHBERI.md`: görsel boyutları, yön, kod tanıtma, karakter katmanları.
+
+## v19 — Serbest yerleştirme (✋ Hizala)
+- Düzenleme modunda yeni **✋ Hizala** aracı: bir eşyayı tutup kareye bağlı kalmadan istediğin piksele sürükle; bırakınca otomatik kaydedilir.
+- Fare tekerleği veya **+ / −**: boyut (%50–%200). **0**: konum ve boyutu sıfırla.
+- Eşyaya `ox, oy, sc` alanları eklenir (kayma piksel, ölçek yüzde); çarpışma/kaplanan kareler değişmez, sadece görsel kayar.
+- Sunucu: `nudge_furni(p_room, p_id, p_ox, p_oy, p_sc)` — sahiplik kontrolü pickup ile aynı, değerler ±200 / 50–200 aralığına kısılır.
+- **schema.sql'i yeniden çalıştır** ve yeniden deploy et.

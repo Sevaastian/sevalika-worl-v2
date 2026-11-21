@@ -151,7 +151,8 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   const [showAvatar, setShowAvatar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
   const [showChat, setShowChat] = useState(true);
   const [buildMode, setBuildMode] = useState(false);
-  const [buildTool, setBuildTool] = useState<"place" | "remove">("place");
+  const [nudgeSel, setNudgeSel] = useState<string | null>(null);
+  const [buildTool, setBuildTool] = useState<"place" | "remove" | "nudge">("place");
   const [selectedFurni, setSelectedFurni] = useState<FurniType>("sofa");
   const [rotation, setRotation] = useState(0);
   const [selected, setSelected] = useState<{ name: string; role: UserRole } | null>(null);
@@ -1196,6 +1197,25 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     if (e) e.flag = flag?.active && flag.room === roomSlug && flag.gx !== undefined && flag.gy !== undefined ? { gx: flag.gx, gy: flag.gy } : null;
   }, [flag, roomSlug]);
 
+  const reloadRoom = useCallback(async () => {
+    const f = await backend.loadRoom(roomSlugRef.current);
+    if (engineRef.current) engineRef.current.furni = f;
+  }, []);
+
+  const saveNudge = useCallback(
+    async (id: string) => {
+      const it = engineRef.current?.furni.find((f) => f.id === id);
+      if (!it) return;
+      try {
+        await backend.nudgeFurni(roomSlugRef.current, id, it.ox ?? 0, it.oy ?? 0, it.sc ?? 100);
+      } catch (err) {
+        notify(err instanceof Error ? err.message : "Kaydedilemedi.");
+        await reloadRoom();
+      }
+    },
+    [reloadRoom], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   /* ---------------- Klavye ---------------- */
 
   useEffect(() => {
@@ -1204,10 +1224,22 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) return;
       if (e.key.toLowerCase() === "r") setRotation((r) => (r === 0 ? 1 : 0));
+      if (buildTool === "nudge" && nudgeSel) {
+        const it = engineRef.current?.furni.find((f) => f.id === nudgeSel);
+        if (!it) return;
+        if (e.key === "+" || e.key === "=") it.sc = Math.min(200, (it.sc ?? 100) + 5);
+        else if (e.key === "-" || e.key === "_") it.sc = Math.max(50, (it.sc ?? 100) - 5);
+        else if (e.key === "0") {
+          it.ox = 0;
+          it.oy = 0;
+          it.sc = 100;
+        } else return;
+        void saveNudge(nudgeSel);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [buildMode]);
+  }, [buildMode, buildTool, nudgeSel, saveNudge]);
 
   /* ---------------- Oyuncu eylemleri ---------------- */
 
@@ -1225,14 +1257,10 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
 
   const styleRefresh = useRef<() => void>(() => {});
 
-  const reloadRoom = useCallback(async () => {
-    const f = await backend.loadRoom(roomSlugRef.current);
-    if (engineRef.current) engineRef.current.furni = f;
-  }, []);
-
   const handleCanvasClick = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     const engine = engineRef.current;
     if (!engine) return;
+    if (buildMode && buildTool === "nudge") return;
     const tile = engine.tileAtClient(e.clientX, e.clientY);
     if (!tile) return;
     const slug = roomSlugRef.current;
@@ -1352,8 +1380,39 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     netRef.current?.send("move", { id: myId, from: { gx: me.gx, gy: me.gy }, path });
   };
 
+  const nudgeRef = useRef<{ id: string; startX: number; startY: number; ox: number; oy: number } | null>(null);
+
+  const handleCanvasDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!buildMode || buildTool !== "nudge") return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    const it = engine.furniPickAt(e.clientX, e.clientY);
+    if (!it) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    nudgeRef.current = { id: it.id, startX: e.clientX, startY: e.clientY, ox: it.ox ?? 0, oy: it.oy ?? 0 };
+    setNudgeSel(it.id);
+  };
+
+  const handleCanvasUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = nudgeRef.current;
+    if (!d) return;
+    nudgeRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    void saveNudge(d.id);
+  };
+
   const handleCanvasMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const engine = engineRef.current;
+    const d = nudgeRef.current;
+    if (engine && d) {
+      const it = engine.furni.find((f) => f.id === d.id);
+      const scale = Math.max(0.3, engine.scaleNow());
+      if (it) {
+        it.ox = Math.max(-200, Math.min(200, Math.round(d.ox + (e.clientX - d.startX) / scale)));
+        it.oy = Math.max(-200, Math.min(200, Math.round(d.oy + (e.clientY - d.startY) / scale)));
+      }
+      return;
+    }
     if (engine) engine.hover = engine.tileAtClient(e.clientX, e.clientY);
   };
 
@@ -2045,6 +2104,16 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         <canvas
           ref={canvasRef}
           onClick={handleCanvasClick}
+          onPointerDown={handleCanvasDown}
+          onPointerUp={handleCanvasUp}
+          onPointerCancel={handleCanvasUp}
+          onWheel={(e) => {
+            if (!buildMode || buildTool !== "nudge" || !nudgeSel) return;
+            const it = engineRef.current?.furni.find((f) => f.id === nudgeSel);
+            if (!it) return;
+            it.sc = Math.max(50, Math.min(200, (it.sc ?? 100) + (e.deltaY < 0 ? 5 : -5)));
+            void saveNudge(nudgeSel);
+          }}
           onMouseMove={handleCanvasMove}
           onMouseLeave={() => {
             if (engineRef.current) engineRef.current.hover = null;

@@ -1241,6 +1241,29 @@ export function drawRug(ctx: Ctx, item: FurniItem, l: Layout) {
 /* ------------------------------------------------------------------ */
 
 export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
+  const ox = item.ox ?? 0;
+  const oy = item.oy ?? 0;
+  const sc = (item.sc ?? 100) / 100;
+  if (!ox && !oy && sc === 1) return drawFurniBase(ctx, item, l, time);
+  const sp = FURNI_SPRITES[item.type];
+  const df = FURNI_BY_TYPE[item.type];
+  const bw = sp?.wTiles ?? df?.wTiles ?? 1;
+  const bh = sp?.hTiles ?? df?.hTiles ?? 1;
+  const w = item.rot === 1 ? bh : bw;
+  const h = item.rot === 1 ? bw : bh;
+  const c = gridToScreen(item.gx + (w - 1) / 2, item.gy + (h - 1) / 2, l);
+  const ax = c.sx;
+  const ay = c.sy + l.tileH * ((w + h) / 4);
+  ctx.save();
+  ctx.translate(ox * l.scale, oy * l.scale);
+  ctx.translate(ax, ay);
+  ctx.scale(sc, sc);
+  ctx.translate(-ax, -ay);
+  drawFurniBase(ctx, item, l, time);
+  ctx.restore();
+}
+
+function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const def = FURNI_BY_TYPE[item.type];
   const spriteMeta = FURNI_SPRITES[item.type];
   const baseW = spriteMeta?.wTiles ?? def?.wTiles ?? 1;

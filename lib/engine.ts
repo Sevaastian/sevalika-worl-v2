@@ -178,6 +178,38 @@ export class GameEngine {
     return best;
   }
 
+  scaleNow(): number {
+    return this.layout.scale;
+  }
+
+  /** Ekran noktasındaki eşya (görsel kutusuna göre, serbest konum ve ölçek dahil); en öndeki döner. */
+  furniPickAt(clientX: number, clientY: number): FurniItem | undefined {
+    const rect = this.canvas.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const l = this.layout;
+    let best: FurniItem | undefined;
+    let bestDepth = -Infinity;
+    for (const f of this.furni) {
+      const { wTiles, hTiles } = this.getFurniFootprint(f);
+      const c = gridToScreen(f.gx + (wTiles - 1) / 2, f.gy + (hTiles - 1) / 2, l);
+      const sp = FURNI_SPRITES[f.type];
+      const sc = (f.sc ?? 100) / 100;
+      const w = (sp?.drawW ?? l.tileW * wTiles) * l.scale * sc;
+      const h = (sp?.drawH ?? l.tileH * 2.5) * l.scale * sc;
+      const ax = c.sx + (f.ox ?? 0) * l.scale;
+      const ay = c.sy + l.tileH * ((wTiles + hTiles) / 4) + (f.oy ?? 0) * l.scale + (sp ? (sp.offsetY ?? 6) * l.scale * sc : 0);
+      const axx = ax + (sp ? (sp.offsetX ?? 0) * l.scale * sc : 0);
+      if (px < axx - w / 2 || px > axx + w / 2 || py < ay - h || py > ay + l.tileH * 0.6) continue;
+      const depth = f.gx + f.gy + wTiles + hTiles + ((FURNI_BY_TYPE[f.type]?.floor ?? false) ? -100 : 0);
+      if (depth >= bestDepth) {
+        bestDepth = depth;
+        best = f;
+      }
+    }
+    return best;
+  }
+
   furniAt(tile: Tile, floorLayer: boolean | null = null): FurniItem | undefined {
     for (let i = this.furni.length - 1; i >= 0; i--) {
       const f = this.furni[i];

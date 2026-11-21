@@ -74,6 +74,7 @@ export interface Backend {
   buyAndPlace(room: string, type: FurniType, gx: number, gy: number, rot: number): Promise<number>;
   placeFromBag(room: string, type: FurniType, gx: number, gy: number, rot: number): Promise<string[]>;
   pickup(room: string, id: string): Promise<string[]>;
+  nudgeFurni(room: string, id: string, ox: number, oy: number, sc: number): Promise<void>;
   loadRoom(slug: string): Promise<FurniItem[]>;
   enterRoom(slug: string): Promise<void>;
   ensureHome(): Promise<string>;
@@ -353,6 +354,9 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
     async pickup(room, id) {
       const r = await rpc<{ inventory: string[] }>("pickup_furni", { p_room: room, p_id: id });
       return r.inventory;
+    },
+    async nudgeFurni(room, id, ox, oy, sc) {
+      await rpc("nudge_furni", { p_room: room, p_id: id, p_ox: Math.round(ox), p_oy: Math.round(oy), p_sc: Math.round(sc) });
     },
     async loadRoom(slug) {
       const { data, error } = await sb.from("rooms").select("furni").eq("slug", slug).maybeSingle();
@@ -834,6 +838,16 @@ function createDemoBackend(): Backend {
       room(slug).push({ id: uid(), type, gx, gy, rot, owner: p.username });
       pushRoom(slug);
       return [...p.inventory];
+    },
+    async nudgeFurni(slug, id, ox, oy, sc) {
+      const p = need();
+      const item = room(slug).find((f) => f.id === id);
+      if (!item) throw new Error("Eşya bulunamadı.");
+      const ownsRoom = slug === homeSlug(p.username);
+      if (p.role !== "admin" && !ownsRoom && item.owner !== p.username) throw new Error("Bu eşya sana ait değil.");
+      item.ox = Math.max(-200, Math.min(200, Math.round(ox)));
+      item.oy = Math.max(-200, Math.min(200, Math.round(oy)));
+      item.sc = Math.max(50, Math.min(200, Math.round(sc)));
     },
     async pickup(slug, id) {
       const p = need();

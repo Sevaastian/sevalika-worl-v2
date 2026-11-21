@@ -58,6 +58,10 @@ export interface FurniItem {
   gy: number;
   rot: number;
   owner?: string | null;
+  /** Serbest konum: 1x pikseliyle kaydırma ve yüzde ölçek (50–200) */
+  ox?: number;
+  oy?: number;
+  sc?: number;
 }
 
 export interface Tile {

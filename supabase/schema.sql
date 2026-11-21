@@ -477,6 +477,30 @@ begin
   return jsonb_build_object('inventory', to_jsonb(new_inv));
 end $$;
 
+-- v19: Serbest konum (piksel kaydırma + ölçek)
+create or replace function public.nudge_furni(p_room text, p_id text, p_ox int, p_oy int, p_sc int default 100) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; r public.rooms; item jsonb; v_ox int; v_oy int; v_sc int;
+begin
+  me := public._me();
+  select * into r from public.rooms where slug = p_room for update;
+  if not found then raise exception 'Oda bulunamadı.'; end if;
+  select f into item from jsonb_array_elements(r.furni) f where f->>'id' = p_id;
+  if item is null then raise exception 'Eşya bulunamadı.'; end if;
+  if me.role <> 'admin' and r.owner_id is distinct from me.id and (item->>'owner') is distinct from me.id::text then
+    raise exception 'Bu eşya sana ait değil.';
+  end if;
+  v_ox := greatest(-200, least(200, coalesce(p_ox, 0)));
+  v_oy := greatest(-200, least(200, coalesce(p_oy, 0)));
+  v_sc := greatest(50, least(200, coalesce(p_sc, 100)));
+  update public.rooms
+     set furni = (select coalesce(jsonb_agg(case when f->>'id' = p_id
+                    then f || jsonb_build_object('ox', v_ox, 'oy', v_oy, 'sc', v_sc) else f end), '[]'::jsonb)
+                  from jsonb_array_elements(furni) f),
+         updated_at = now()
+   where slug = p_room;
+end $$;
+
 -- ---------- Admin RPC'leri ---------------------------------------------
 
 create or replace function public.admin_set_role(p_username text, p_role text) returns void
@@ -2653,7 +2677,7 @@ begin
                          'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni',
                          'admin_set_role','admin_gift','admin_kick','admin_announce','admin_dance','admin_clear_room',
                          'send_chat','roll_dice','heartbeat','friend_request','friend_respond','friend_remove','get_friends',
-                         'gift_coins','gift_item','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
+                         'gift_coins','gift_item','nudge_furni','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
                          'admin_start_quiz','answer_quiz','admin_mute','admin_unmute','admin_ban','admin_unban',
                          'report_player','admin_list_reports','admin_close_report','admin_get_log',
                          'fish_price','buy_fishing_rod','equip_tool','catch_fish','sell_fish',
@@ -2673,6 +2697,7 @@ grant execute on function public.set_look(text, text, text)                     
 grant execute on function public.buy_and_place_furni(text, text, int, int, int) to authenticated;
 grant execute on function public.place_from_bag(text, text, int, int, int)      to authenticated;
 grant execute on function public.pickup_furni(text, text)                       to authenticated;
+grant execute on function public.nudge_furni(text, text, int, int, int)            to authenticated;
 grant execute on function public.admin_set_role(text, text)                     to authenticated;
 grant execute on function public.admin_gift(text, int)                          to authenticated;
 grant execute on function public.admin_kick(text)                               to authenticated;

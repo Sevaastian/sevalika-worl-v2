@@ -221,20 +221,23 @@ export function BagPanel(props: { inventory: string[]; riding: boolean; tool: st
 
 export function BuildPanel(props: {
   isAdmin: boolean;
-  tool: "place" | "remove";
+  tool: "place" | "remove" | "nudge";
   selected: FurniType;
-  onTool: (t: "place" | "remove") => void;
+  onTool: (t: "place" | "remove" | "nudge") => void;
   onSelect: (t: FurniType) => void;
   onRotate: () => void;
 }) {
   return (
     <div className="bg-slate-900/95 backdrop-blur border border-yellow-500/40 p-2.5 md:p-3 rounded-xl w-60 md:w-64 space-y-2 shadow-2xl">
-      <div className="grid grid-cols-2 gap-1 bg-slate-800 p-1 rounded-lg text-[11px] font-bold">
+      <div className="grid grid-cols-3 gap-1 bg-slate-800 p-1 rounded-lg text-[11px] font-bold">
         <button onClick={() => props.onTool("place")} className={`py-1 rounded ${props.tool === "place" ? "bg-yellow-400 text-slate-950" : "text-slate-300"}`}>
           ➕ Yerleştir
         </button>
         <button onClick={() => props.onTool("remove")} className={`py-1 rounded ${props.tool === "remove" ? "bg-rose-400 text-slate-950" : "text-slate-300"}`}>
           🗑️ Kaldır
+        </button>
+        <button onClick={() => props.onTool("nudge")} className={`py-1 rounded ${props.tool === "nudge" ? "bg-sky-400 text-slate-950" : "text-slate-300"}`}>
+          ✋ Hizala
         </button>
       </div>
 
@@ -263,6 +266,12 @@ export function BuildPanel(props: {
             ))}
           </div>
         </>
+      ) : props.tool === "nudge" ? (
+        <div className="text-[11px] text-slate-300 leading-relaxed space-y-1">
+          <div><b className="text-sky-300">Serbest yerleştirme:</b> bir eşyayı tutup kareye bağlı kalmadan istediğin noktaya sürükle.</div>
+          <div>🖱️ Tekerlek veya <b>+ / −</b>: boyutu değiştir.</div>
+          <div><b>0</b> tuşu: konumu ve boyutu sıfırla.</div>
+        </div>
       ) : (
         <div className="text-[11px] text-slate-400 leading-relaxed">Kaldırmak istediğin eşyaya tıkla. Eşya çantana gelir. Sadece kendi koyduğun eşyaları kaldırabilirsin (admin hepsini).</div>
       )}
