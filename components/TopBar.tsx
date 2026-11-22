@@ -5,7 +5,7 @@ import type { ConnStatus } from "@/lib/network";
 import type { Profile } from "@/lib/types";
 import RoleBadge from "./RoleBadge";
 
-export type PanelKey = "bag" | "friends" | "shop" | "quests" | "badges" | "wheel" | "market" | "guild" | "admin";
+export type PanelKey = "bag" | "friends" | "shop" | "quests" | "badges" | "wheel" | "events" | "market" | "guild" | "admin";
 
 type ConnKey = "connected" | "connecting" | "demo" | "error";
 
@@ -109,7 +109,7 @@ export default function TopBar({
       </div>
 
       {/* Sağ araçlar */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar">
         {isAdmin && (
           <button
             onClick={() => onTogglePanel("admin")}
@@ -131,7 +131,7 @@ export default function TopBar({
             inHome ? "bg-amber-500 text-slate-950 border-amber-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          🏠 <span className="hidden lg:inline">Evim</span>
+          🏠 <span className="hidden 2xl:inline">Evim</span>
         </button>
 
         <button
@@ -140,7 +140,7 @@ export default function TopBar({
             panel === "friends" ? "bg-sky-500 text-slate-950 border-sky-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          👥 <span className="hidden lg:inline">Arkadaşlar</span>
+          👥 <span className="hidden 2xl:inline">Arkadaşlar</span>
           {friendBadge > 0 && (
             <span className="ml-1 bg-rose-500 text-white text-[10px] font-black px-1.5 rounded-full">{friendBadge}</span>
           )}
@@ -153,7 +153,7 @@ export default function TopBar({
             panel === "quests" ? "bg-emerald-500 text-slate-950 border-emerald-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          📜 <span className="hidden lg:inline">Görevler</span>
+          📜 <span className="hidden 2xl:inline">Görevler</span>
           {questBadge > 0 && <span className="ml-1 bg-emerald-500 text-slate-950 text-[10px] font-black px-1.5 rounded-full">{questBadge}</span>}
         </button>
 
@@ -164,7 +164,17 @@ export default function TopBar({
             panel === "badges" ? "bg-amber-400 text-slate-950 border-amber-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          🎖️ <span className="hidden lg:inline">Rozetler</span>
+          🎖️ <span className="hidden 2xl:inline">Rozetler</span>
+        </button>
+
+        <button
+          onClick={() => onTogglePanel("events")}
+          title="Etkinlikler"
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+            panel === "events" ? "bg-amber-400 text-slate-950 border-amber-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+          }`}
+        >
+          🎉 <span className="hidden 2xl:inline">Etkinlik</span>
         </button>
 
         <button
@@ -174,7 +184,7 @@ export default function TopBar({
             panel === "wheel" ? "bg-fuchsia-400 text-slate-950 border-fuchsia-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          🎡 <span className="hidden lg:inline">Çark</span>
+          🎡 <span className="hidden 2xl:inline">Çark</span>
         </button>
 
         <button
@@ -184,7 +194,7 @@ export default function TopBar({
             panel === "guild" ? "bg-indigo-500 text-white border-indigo-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          🛡️ <span className="hidden lg:inline">Lonca</span>
+          🛡️ <span className="hidden 2xl:inline">Lonca</span>
         </button>
 
         <button
@@ -194,7 +204,7 @@ export default function TopBar({
             panel === "market" ? "bg-amber-500 text-slate-950 border-amber-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          🏪 <span className="hidden lg:inline">Pazar</span>
+          🏪 <span className="hidden 2xl:inline">Pazar</span>
         </button>
 
         <button
@@ -203,7 +213,7 @@ export default function TopBar({
             panel === "bag" ? "bg-pink-600 text-white border-pink-400" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
           }`}
         >
-          🎒 <span className="hidden lg:inline">Çantam</span>{" "}
+          🎒 <span className="hidden 2xl:inline">Çantam</span>{" "}
           <span className="text-[10px] bg-slate-700 px-1.5 rounded-full">{profile.inventory.length}</span>
         </button>
 

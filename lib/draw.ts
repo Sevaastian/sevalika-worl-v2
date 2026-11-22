@@ -1,4 +1,5 @@
-import { bodyLayers, drawLayer, layersReady } from "./avatarLayers";
+import { lighting, silhouette } from "./ambience";
+import { bodyLayers, drawLayer, hasLayeredTop, layersReady } from "./avatarLayers";
 import { FURNI_BY_TYPE, ROOM_ROCKS, canRideHorse, isWaterTile, oyunikaCellAt } from "./constants";
 import { getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
@@ -670,6 +671,10 @@ function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): Tile
       if (gy >= 6 && gy <= 9) return { a: "#6f7683", b: "#676e7b", kind: "asphalt", edge: "#3a3f4a55" };
       if (gx >= 10 && gx <= 23) return { a: (gx + gy) % 6 < 3 ? "#f1e6cf" : "#e6d7b8", b: "#dccdb0", kind: "brick", edge: "#8a7a5c55" };
       return { a: "#74c04f", b: "#68b448", kind: "grass", edge: "#3f7a2a44" };
+    case "kis-koyu":
+      if (gx >= 11 && gx <= 19 && gy >= 4 && gy <= 11) return { a: (gx + gy) % 2 ? "#cfe9f7" : "#c3e1f2", b: "#b4d6ec", kind: "marble", edge: "#6aa5c855" };
+      if (gy === 8 && gx <= 10) return { a: "#d9cfc0", b: "#cdc2b0", kind: "brick", edge: "#7a6e5d55" };
+      return { a: (gx * 7 + gy * 3) % 5 < 2 ? "#f4f8fd" : "#eaf1f9", b: "#dde8f4", kind: "plain", edge: "#9fb6d333" };
     case "emlak-ofisi":
       if (gx >= 6 && gx <= 10 && gy >= 5 && gy <= 10) return { a: "#99f6e4", b: "#7fe7d8", kind: "carpet", edge: "#0f766e55" };
       return { a: "#efe6d6", b: "#e0d5bf", kind: "marble", edge: "#a8a29e44" };
@@ -882,6 +887,7 @@ function drawSlab(ctx: Ctx, l: Layout, slug: string, theme: RoomTheme) {
       case "avm": return ["#b8afc9", "#9a90b0"];
       case "avm-kat2": return ["#d9a7c4", "#c18eac"];
       case "emlak-ofisi": return ["#8fbdb5", "#74a69d"];
+      case "kis-koyu": return ["#9fb3cf", "#8499b9"];
       case "ciftlik": return ["#8a5a34", "#6e4426"];
       case "sahil-kasabasi":
       case "iskele": return ["#a5733c", "#845a2c"];
@@ -1248,7 +1254,9 @@ export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const ox = item.ox ?? 0;
   const oy = item.oy ?? 0;
   const sc = (item.sc ?? 100) / 100;
-  if (!ox && !oy && sc === 1) return drawFurniBase(ctx, item, l, time);
+  // Bitkiler rüzgârda hafifçe sallanır (ayak noktası sabit, üst kısım yana yatar)
+  const sway = item.type === "tree" || item.type === "palm" ? 0.022 : item.type === "plant" ? 0.03 : 0;
+  if (!ox && !oy && sc === 1 && !sway) return drawFurniBase(ctx, item, l, time);
   const sp = FURNI_SPRITES[item.type];
   const df = FURNI_BY_TYPE[item.type];
   const bw = sp?.wTiles ?? df?.wTiles ?? 1;
@@ -1262,6 +1270,7 @@ export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   ctx.translate(ox * l.scale, oy * l.scale);
   ctx.translate(ax, ay);
   ctx.scale(sc, sc);
+  if (sway) ctx.transform(1, 0, Math.sin(time / 1100 + item.gx * 1.7 + item.gy) * sway, 1, 0, 0);
   ctx.translate(-ax, -ay);
   drawFurniBase(ctx, item, l, time);
   ctx.restore();
@@ -1292,11 +1301,20 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
 
-      // Yumuşak temas gölgesi (Ambient Occlusion)
-      ctx.fillStyle = NO_SHADOW;
-      ctx.beginPath();
-      ctx.ellipse(sx + ox, footY - 2 * l.scale, w * 0.34, h * 0.11, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Yönlü silüet gölgesi: güneşin yönüne göre yatar (yuvarlak temas gölgesi yok)
+      if (lighting.shadowAlpha > 0.01 && spriteMeta.drawH <= 135) {
+        const sil = silhouette(img as CanvasImageSource & { width: number; height: number });
+        if (sil) {
+          ctx.save();
+          ctx.globalAlpha = lighting.shadowAlpha;
+          const ix = sx + ox;
+          const iy = footY + oy;
+          ctx.transform(1, 0, lighting.shadowSkew, -lighting.shadowSquash, ix, iy);
+          if (item.rot === 1 && wTiles === 1 && hTiles === 1 && def?.sittable) ctx.scale(-1, 1);
+          ctx.drawImage(sil, -w / 2, -h, w, h);
+          ctx.restore();
+        }
+      }
 
       if (item.rot === 1 && wTiles === 1 && hTiles === 1 && def?.sittable) {
         // Döndürülmüş oturaklar: sprite'ı yatay çevir (güneybatıya baksın)
@@ -1810,73 +1828,240 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
 /* Süvari atı                                                          */
 /* ------------------------------------------------------------------ */
 
+/** Süvari atı: kestane rengi, gölgeli gövde, eklemli bacaklar, akan yele/kuyruk, eyer takımı ve dizgin. */
 function drawHorse(ctx: Ctx, isMoving: boolean, time: number) {
-  const gallop = isMoving ? Math.sin(time / 85) * 2.5 : 0;
+  const t = time / 85;
+  const idle = Math.sin(time / 900) * 0.6;
+  const gallop = isMoving ? Math.sin(t) * 1.6 : idle * 0.4;
+  const COAT = "#8a4b2a";
+  const COAT_D = "#5f3119";
+  const COAT_L = "#b06a3f";
+  const MANE = "#241610";
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
-  ctx.fillStyle = "#18181b";
+  // Toz bulutu (dörtnalda)
+  if (isMoving) {
+    for (let i = 0; i < 3; i++) {
+      const k = (time / 220 + i / 3) % 1;
+      ctx.fillStyle = `rgba(214, 190, 150, ${0.34 * (1 - k)})`;
+      ctx.beginPath();
+      ctx.arc(-20 - k * 14, -2 - k * 6, 2.2 + k * 3.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Bir bacak: kalça/omuz → diz → toynak; faz ile salınır
+  const leg = (x: number, phase: number, upper: string, lower: string, front: boolean) => {
+    const sw = isMoving ? Math.sin(t + phase) : 0;
+    const lift = isMoving ? Math.max(0, Math.cos(t + phase)) * 3 : 0;
+    const hx = x;
+    const hy = -13;
+    const kx = x + sw * 4.2 + (front ? 1.2 : -1.2);
+    const ky = -6.5 - lift * 0.4;
+    const fx = x + sw * 6.4 + (front ? 0.2 : 0.8);
+    const fy = -1.4 - lift;
+    ctx.strokeStyle = upper;
+    ctx.lineWidth = 4.4;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(kx, ky);
+    ctx.stroke();
+    ctx.strokeStyle = lower;
+    ctx.lineWidth = 2.8;
+    ctx.beginPath();
+    ctx.moveTo(kx, ky);
+    ctx.lineTo(fx, fy);
+    ctx.stroke();
+    ctx.fillStyle = "#f1f5f9"; // beyaz çorap
+    ctx.fillRect(fx - 1.5, fy - 3.4, 3, 2.6);
+    ctx.fillStyle = "#1c1612"; // toynak
+    ctx.beginPath();
+    ctx.roundRect(fx - 2.1, fy - 1.1, 4.2, 2.6, 0.8);
+    ctx.fill();
+  };
+
+  // Kuyruk (arka)
+  const tailSw = Math.sin(time / (isMoving ? 120 : 520)) * (isMoving ? 4.5 : 1.6);
+  ctx.fillStyle = MANE;
   ctx.beginPath();
-  ctx.moveTo(-18, -18);
-  ctx.quadraticCurveTo(-26, -14 + gallop, -23, -4);
-  ctx.lineTo(-17, -11);
+  ctx.moveTo(-17, -24);
+  ctx.bezierCurveTo(-25, -25 + tailSw * 0.3, -29 + tailSw, -16, -26 + tailSw * 1.3, -6);
+  ctx.bezierCurveTo(-23 + tailSw, -14, -21, -17, -16, -19);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#4a2f20";
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-20, -22);
+  ctx.quadraticCurveTo(-24 + tailSw * 0.8, -15, -23 + tailSw * 1.1, -9);
+  ctx.stroke();
+
+  // Uzak taraf bacakları (koyu)
+  leg(-12, Math.PI, COAT_D, "#4a2812", false);
+  leg(11, 0, COAT_D, "#4a2812", true);
+
+  // Gövde
+  const body = ctx.createLinearGradient(0, -28, 0, -10);
+  body.addColorStop(0, COAT_L);
+  body.addColorStop(0.45, COAT);
+  body.addColorStop(1, COAT_D);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.moveTo(-18, -20);
+  ctx.bezierCurveTo(-19, -29, -8, -28.5, 0, -27.5);
+  ctx.bezierCurveTo(8, -28.5, 16, -28, 18, -22);
+  ctx.bezierCurveTo(20, -14, 14, -9, 6, -9.5);
+  ctx.bezierCurveTo(-2, -8, -8, -9, -13, -10);
+  ctx.bezierCurveTo(-18, -11.5, -19.5, -15, -18, -20);
+  ctx.closePath();
+  ctx.fill();
+  // kalça/omuz kası vurgusu
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.beginPath();
+  ctx.ellipse(-10, -21, 5.5, 3.6, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(10, -21.5, 4.6, 3.2, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Boyun
+  const neck = ctx.createLinearGradient(10, -40, 18, -20);
+  neck.addColorStop(0, COAT_L);
+  neck.addColorStop(1, COAT);
+  ctx.fillStyle = neck;
+  ctx.beginPath();
+  ctx.moveTo(10, -27);
+  ctx.bezierCurveTo(12, -34, 15, -39, 19, -41);
+  ctx.lineTo(25, -36);
+  ctx.bezierCurveTo(22, -31, 20, -26, 19, -20);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "#09090b";
-  ctx.fillRect(-14, -10 - gallop, 3.5, 13);
-  ctx.fillRect(-8, -10 + gallop, 3.5, 13);
-  ctx.fillRect(8, -10 + gallop, 3.5, 13);
-  ctx.fillRect(14, -10 - gallop, 3.5, 13);
-
-  ctx.fillStyle = "#cbd5e1";
-  ctx.fillRect(-14, 1 - gallop, 3.5, 2);
-  ctx.fillRect(-8, 1 + gallop, 3.5, 2);
-  ctx.fillRect(8, 1 + gallop, 3.5, 2);
-  ctx.fillRect(14, 1 - gallop, 3.5, 2);
-
-  ctx.fillStyle = "#09090b";
+  // Yele (boynun üstünde dalgalanır)
+  ctx.fillStyle = MANE;
+  const mane = isMoving ? Math.sin(t * 1.3) * 1.8 : Math.sin(time / 700) * 0.5;
   ctx.beginPath();
-  ctx.roundRect(-18, -23, 36, 15, 7);
+  ctx.moveTo(10, -27);
+  ctx.bezierCurveTo(9 - mane, -33, 11 - mane, -39, 17, -43);
+  ctx.lineTo(19.5, -41);
+  ctx.bezierCurveTo(14 - mane * 0.6, -37, 13 - mane, -32, 13, -26);
+  ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = "#334155";
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(10 + i * 1.8, -30 - i * 3.3);
+    ctx.lineTo(6.5 + i * 1.6 - mane * (0.6 + i * 0.2), -29 - i * 3.3);
+    ctx.lineTo(11 + i * 1.8, -27.8 - i * 3.3);
+    ctx.fill();
+  }
 
-  ctx.fillStyle = "#1e293b";
+  // Kafa
+  ctx.save();
+  ctx.translate(23, -37);
+  ctx.rotate(0.62 + (isMoving ? Math.sin(t) * 0.05 : idle * 0.03));
+  ctx.fillStyle = COAT;
   ctx.beginPath();
-  ctx.roundRect(-8, -24, 16, 11, 3);
+  ctx.ellipse(0, 0, 8.6, 4.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = COAT_L;
+  ctx.beginPath();
+  ctx.ellipse(-1, -1.5, 6.2, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // ağız/burun
+  ctx.fillStyle = "#3b2214";
+  ctx.beginPath();
+  ctx.ellipse(7, 0.9, 3.2, 2.9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#0f0a07";
+  ctx.beginPath();
+  ctx.ellipse(8.2, -0.3, 0.7, 0.9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // alında beyaz çizgi
+  ctx.fillStyle = "#f8fafc";
+  ctx.beginPath();
+  ctx.ellipse(1.4, -0.3, 5.6, 0.95, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // göz
+  ctx.fillStyle = "#0f0a07";
+  ctx.beginPath();
+  ctx.arc(-0.8, -1.4, 1.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(-1.2, -1.9, 0.6, 0.6);
+  // yular
+  ctx.strokeStyle = "#1c1917";
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(-3, -4);
+  ctx.lineTo(-3.4, 3.6);
+  ctx.moveTo(4.6, -2.8);
+  ctx.lineTo(4.8, 3.8);
+  ctx.stroke();
+  ctx.strokeStyle = "#facc15";
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-5, -3.6);
+  ctx.lineTo(0.5, -4.2);
+  ctx.stroke();
+  ctx.restore();
+  // kulaklar
+  ctx.fillStyle = COAT_D;
+  ctx.beginPath();
+  ctx.moveTo(17.2, -41);
+  ctx.lineTo(16.6, -46.6);
+  ctx.lineTo(20.4, -42);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = COAT;
+  ctx.beginPath();
+  ctx.moveTo(19.6, -41.4);
+  ctx.lineTo(20.2, -46.8);
+  ctx.lineTo(22.4, -42);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eyer takımı: kırmızı-altın örtü, deri eyer, sıkma kayışı
+  ctx.fillStyle = "#991b1b";
+  ctx.beginPath();
+  ctx.roundRect(-9.5, -28.4 - gallop * 0.1, 18, 8.4, 2);
   ctx.fill();
   ctx.strokeStyle = "#facc15";
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
-
-  ctx.fillStyle = "#09090b";
-  ctx.beginPath();
-  ctx.moveTo(11, -21);
-  ctx.lineTo(19, -35);
-  ctx.lineTo(25, -31);
-  ctx.lineTo(18, -15);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(22, -32, 7.5, 4.5, 0.35, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#27272a";
-  ctx.beginPath();
-  ctx.moveTo(18, -36);
-  ctx.lineTo(19, -41);
-  ctx.lineTo(21, -36);
-  ctx.fill();
-
-  ctx.strokeStyle = "#e2e8f0";
   ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#7c2d12";
   ctx.beginPath();
-  ctx.moveTo(24, -30);
-  ctx.lineTo(10, -22);
+  ctx.roundRect(-7.6, -31.2, 14, 5.2, [3, 3, 1.5, 1.5]);
+  ctx.fill();
+  ctx.fillStyle = "#9a3f1a";
+  ctx.fillRect(-6.4, -30.8, 9, 1.4);
+  ctx.strokeStyle = "#3f1d0c";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(1, -21);
+  ctx.lineTo(1.6, -11.5);
+  ctx.stroke();
+  // üzengi
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(3, -24);
+  ctx.lineTo(3.8, -16.6);
+  ctx.stroke();
+  ctx.strokeRect(2.2, -16.4, 3.2, 2.2);
+  // dizgin
+  ctx.strokeStyle = "#1c1917";
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(8.4, -30.4);
+  ctx.quadraticCurveTo(18, -29 + gallop * 0.2, 28.6, -32.5);
   ctx.stroke();
 
-  ctx.fillStyle = "#38bdf8";
-  ctx.fillRect(21, -33.5, 2, 2);
+  // Yakın taraf bacakları (açık)
+  leg(-8, 0, COAT, "#6b3920", false);
+  leg(15, Math.PI, COAT, "#6b3920", true);
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ */
@@ -2435,16 +2620,42 @@ function drawBack(ctx: Ctx, id: string, ay: number, time: number, moving: boolea
   }
 }
 
+/** Emote sırasında sağ kol havaya kalkar: 👋 sallar, 👏/🎉 iki kol çırpar, ❤️😍 kalbe götürür */
+function drawEmoteArm(ctx: Ctx, p: Player, ay: number, time: number) {
+  const e = p.emoteAnim;
+  if (!e || p.isSitting || p.isRidingHorse || p.path.length > 0) return;
+  const cheer = e === "👏" || e === "🎉" || e === "😂";
+  ctx.save();
+  ctx.fillStyle = p.skinColor;
+  const wave = Math.sin(time / 90);
+  const arm = (x: number, ang: number) => {
+    ctx.save();
+    ctx.translate(x, ay - 30);
+    ctx.rotate(ang);
+    ctx.fillStyle = p.shirtColor;
+    ctx.fillRect(-1.5, 0, 3, 5);
+    ctx.fillStyle = p.skinColor;
+    ctx.fillRect(-1.3, 4, 2.6, 8);
+    ctx.restore();
+  };
+  if (cheer) {
+    arm(-10, 2.7 + Math.abs(wave) * 0.35);
+    arm(10, -2.7 - Math.abs(wave) * 0.35);
+  } else arm(10, -2.5 + wave * 0.45);
+  ctx.restore();
+}
+
 function drawLayeredAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number): boolean {
   const standing = !p.isSitting && !p.isRidingHorse;
-  const { under, over } = bodyLayers({ skin: p.skinColor, shirt: p.shirtColor, hair: p.hairColor, hairStyle: p.hairStyle, back: FACE_BACK, legs: standing });
+  const { under, over } = bodyLayers({ skin: p.skinColor, shirt: p.shirtColor, hair: p.hairColor, hairStyle: p.hairStyle, back: FACE_BACK, legs: standing, top: p.top });
   if (!layersReady([...under, ...over])) return false;
   const frame = isMoving && standing ? 1 + (Math.floor(time / 150) % 4) : 0;
   if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
   for (const l of under) drawLayer(ctx, l, frame, ay);
   const armSwing = isMoving && standing ? Math.sin(time / 95) * 6 : Math.sin(time / 700) * 0.6;
-  if (p.top) drawTop(ctx, p.top, ay, armSwing, p.shirtColor);
+  if (p.top && !hasLayeredTop(p.top)) drawTop(ctx, p.top, ay, armSwing, p.shirtColor);
   for (const l of over) drawLayer(ctx, l, frame, ay);
+  drawEmoteArm(ctx, p, ay, time);
   if (p.glasses && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
   if (p.hat) drawHat(ctx, p.hat, ay);
   return true;
@@ -2527,6 +2738,7 @@ function drawStandardAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, 
   }
   drawEyes(ctx, ay);
 
+  drawEmoteArm(ctx, p, ay, time);
   if (p.glasses && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
   if (p.hat) drawHat(ctx, p.hat, ay);
 }
@@ -2779,7 +2991,7 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath();
   if (lying) ctx.ellipse(0, 3, 26, 9, flip * -0.45, 0, Math.PI * 2);
-  else ctx.ellipse(0, 3, riding ? 20 : 12, riding ? 8 : 6, 0, 0, Math.PI * 2);
+  else ctx.ellipse(0, 3, riding ? 22 : 12, riding ? 8 : 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
   // Gövde: yöne göre yatay çevirme, şezlongda eğik yatış

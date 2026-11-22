@@ -1,12 +1,13 @@
 import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile } from "./constants";
 import { drawAvatar, drawBubble, drawFlag, drawFurni, drawPet, drawRock, drawRoom, drawRug, roomRocks } from "./draw";
 import { getLayout, gridToScreen, inGrid, screenToGrid, type Layout } from "./iso";
+import { lighting, updateLighting } from "./ambience";
 import { findPath } from "./pathfinding";
 import { FURNI_SPRITES, sprites } from "./sprites";
 import type { ChatBubble, Emote, FurniItem, Player, RoomDef, Tile, WeatherMode } from "./types";
 
 const WALK_SPEED = 3.4; // kare/sn
-const HORSE_SPEED = 5.4;
+const HORSE_SPEED = 6.4; // süvari atı: yürümeden ~%90 hızlı (sunucu limiti 7 kare/sn + tolerans)
 const BUBBLE_LIFETIME_MS = 6500;
 const EMOTE_LIFETIME_MS = 2400;
 
@@ -24,6 +25,18 @@ export class GameEngine {
   flag: Tile | null = null;
   private pets = new Map<string, { gx: number; gy: number; moving: boolean }>();
   private flakes: { x: number; y: number; v: number; r: number }[] = [];
+  /** Mevsim parçacıkları (sonbahar yaprağı, bahar yaprağı/çiçek) */
+  private motes: { x: number; y: number; v: number; r: number; ph: number; c: number }[] = [];
+  /** Gökyüzünden geçen kuşlar */
+  private birds: { x: number; y: number; v: number; ph: number }[] = [];
+  private nextBird = 0;
+  /** Etkinlik teması (konfeti, havai fişek, fener, balon, kar) */
+  eventTheme: string | null = null;
+  private fx: { x: number; y: number; vx: number; vy: number; life: number; max: number; c: string; r: number; k: number }[] = [];
+  private nextBurst = 0;
+  /** Caddede yavaşça geçen süs araçları (çarpışma yok; yaya önlerindeyse bekler) */
+  private traffic: { type: "car_red" | "car_blue" | "car_yellow"; lane: number; x: number; dir: 1 | -1; v: number }[] = [];
+
   furni: FurniItem[] = [];
   hover: Tile | null = null;
   buildMode = false;
@@ -322,9 +335,207 @@ export class GameEngine {
       }
     }
 
+    this.updateAmbient(dt, mode);
+    this.updateEventFx(dt);
+    for (const p of this.players) p.emoteAnim = null;
+    for (const e of this.emotes) {
+      const pl = this.players.find((x) => x.id === e.playerId);
+      if (pl) pl.emoteAnim = e.emoji;
+    }
+
     const t = performance.now();
     this.bubbles = this.bubbles.filter((b) => t - b.createdAt < BUBBLE_LIFETIME_MS);
     this.emotes = this.emotes.filter((e) => t - e.createdAt < EMOTE_LIFETIME_MS);
+  }
+
+  private isOutdoor(): boolean {
+    const slug = this.room.slug;
+    return !(slug === "restoran" || slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi" || slug === "oyunika" || slug === "monako-kulup" || slug.startsWith("home-"));
+  }
+
+  private season(): "autumn" | "spring" | "winter" | "summer" {
+    const m = new Date().getMonth();
+    if (m >= 8 && m <= 10) return "autumn";
+    if (m >= 2 && m <= 4) return "spring";
+    if (m === 11 || m <= 1) return "winter";
+    return "summer";
+  }
+
+  private updateAmbient(dt: number, weather: "none" | "rain" | "snow") {
+    const outdoor = this.isOutdoor();
+    // Mevsim parçacıkları
+    const season = this.season();
+    const wantMotes = outdoor && weather === "none" && (season === "autumn" || season === "spring") ? 26 : 0;
+    while (this.motes.length < wantMotes) this.motes.push({ x: Math.random(), y: Math.random(), v: 0.05 + Math.random() * 0.07, r: 2 + Math.random() * 2.2, ph: Math.random() * 6.28, c: Math.floor(Math.random() * 4) });
+    if (this.motes.length > wantMotes) this.motes.length = wantMotes;
+    for (const m of this.motes) {
+      m.y += m.v * dt;
+      m.x += Math.sin(m.y * 9 + m.ph) * 0.012 * dt + 0.01 * dt;
+      m.ph += dt * 2.2;
+      if (m.y > 1.03) {
+        m.y = -0.03;
+        m.x = Math.random();
+      }
+      if (m.x > 1.02) m.x = -0.02;
+    }
+
+    // Kuşlar: gündüz, açık havada arada bir geçer
+    const nowMs = performance.now();
+    const day = lighting.dark < 0.4;
+    if (outdoor && day && weather === "none" && nowMs > this.nextBird && this.birds.length < 4) {
+      const n = 2 + Math.floor(Math.random() * 3);
+      const y0 = 0.08 + Math.random() * 0.25;
+      for (let i = 0; i < n; i++) this.birds.push({ x: -0.05 - i * 0.035, y: y0 + i * 0.012 * (i % 2 ? 1 : -1), v: 0.07 + Math.random() * 0.01, ph: Math.random() * 6 });
+      this.nextBird = nowMs + 14000 + Math.random() * 22000;
+    }
+    for (const b of this.birds) {
+      b.x += b.v * dt;
+      b.ph += dt * 9;
+    }
+    this.birds = this.birds.filter((b) => b.x < 1.08);
+
+    // Cadde trafiği
+    if (this.room.slug === "cadde-1") {
+      if (this.traffic.length === 0) {
+        this.traffic.push({ type: "car_blue", lane: 7, x: 3, dir: 1, v: 1.7 }, { type: "car_yellow", lane: 8, x: 28, dir: -1, v: 1.5 });
+      }
+      for (const c of this.traffic) {
+        let sp = c.v;
+        for (const p of this.players) {
+          const ahead = (p.gx - c.x) * c.dir;
+          if (ahead > -0.5 && ahead < 3.2 && Math.abs(p.gy - c.lane) < 1.1) sp = 0;
+        }
+        c.x += c.dir * sp * dt;
+        if (c.dir === 1 && c.x > this.cols + 3) c.x = -4;
+        if (c.dir === -1 && c.x < -4) c.x = this.cols + 3;
+      }
+    } else if (this.traffic.length) this.traffic = [];
+  }
+
+  private updateEventFx(dt: number) {
+    const theme = this.eventTheme;
+    if (!theme || theme === "none" || !this.isOutdoor()) {
+      this.fx.length = 0;
+      return;
+    }
+    const COLS = ["#f43f5e", "#f59e0b", "#22c55e", "#38bdf8", "#a855f7", "#facc15", "#fb7185"];
+    const now = performance.now();
+    if (theme === "confetti") {
+      while (this.fx.length < 70) this.fx.push({ x: Math.random(), y: -0.05 - Math.random() * 0.4, vx: (Math.random() - 0.5) * 0.04, vy: 0.12 + Math.random() * 0.14, life: 0, max: 99, c: COLS[Math.floor(Math.random() * COLS.length)], r: 3 + Math.random() * 3, k: Math.random() * 6 });
+    } else if (theme === "balloons" || theme === "lanterns") {
+      const want = theme === "balloons" ? 14 : 18;
+      while (this.fx.length < want) this.fx.push({ x: Math.random(), y: 1.05 + Math.random() * 0.5, vx: (Math.random() - 0.5) * 0.01, vy: -(0.035 + Math.random() * 0.04), life: 0, max: 99, c: theme === "balloons" ? COLS[Math.floor(Math.random() * COLS.length)] : "#fbbf24", r: theme === "balloons" ? 9 + Math.random() * 5 : 6 + Math.random() * 3, k: Math.random() * 6 });
+    } else if (theme === "fireworks" && now > this.nextBurst) {
+      const cx = 0.15 + Math.random() * 0.7;
+      const cy = 0.1 + Math.random() * 0.3;
+      const col = COLS[Math.floor(Math.random() * COLS.length)];
+      for (let i = 0; i < 38; i++) {
+        const a = (i / 38) * Math.PI * 2;
+        const sp = 0.12 + Math.random() * 0.1;
+        this.fx.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 1.3, c: col, r: 2, k: 0 });
+      }
+      this.nextBurst = now + 1400 + Math.random() * 2200;
+    }
+    for (const f of this.fx) {
+      f.life += dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.k += dt * 4;
+      if (theme === "fireworks") f.vy += 0.1 * dt;
+      if (theme === "confetti") f.x += Math.sin(f.k) * 0.006 * dt;
+      if (theme === "balloons" || theme === "lanterns") f.x += Math.sin(f.k * 0.6) * 0.004 * dt;
+    }
+    this.fx = this.fx.filter((f) => {
+      if (theme === "fireworks") return f.life < f.max;
+      if (theme === "confetti") return f.y < 1.06;
+      return f.y > -0.1;
+    });
+  }
+
+  private drawEventFx(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    const theme = this.eventTheme;
+    if (!theme || theme === "none" || !this.fx.length) return;
+    ctx.save();
+    for (const f of this.fx) {
+      const x = f.x * width;
+      const y = f.y * height;
+      if (theme === "fireworks") {
+        const a = Math.max(0, 1 - f.life / f.max);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = f.c;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.2 * a + 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (theme === "confetti") {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(f.k);
+        ctx.fillStyle = f.c;
+        ctx.fillRect(-f.r / 2, -f.r / 4, f.r, f.r / 2);
+        ctx.restore();
+      } else if (theme === "balloons") {
+        ctx.strokeStyle = "rgba(226,232,240,0.7)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y + f.r * 1.2);
+        ctx.quadraticCurveTo(x + 4, y + f.r * 2.4, x, y + f.r * 3.4);
+        ctx.stroke();
+        ctx.fillStyle = f.c;
+        ctx.beginPath();
+        ctx.ellipse(x, y, f.r * 0.82, f.r, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.4)";
+        ctx.beginPath();
+        ctx.ellipse(x - f.r * 0.28, y - f.r * 0.32, f.r * 0.18, f.r * 0.3, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (theme === "lanterns") {
+        const g = ctx.createRadialGradient(x, y, 1, x, y, f.r * 3);
+        g.addColorStop(0, "rgba(251,191,36,0.55)");
+        g.addColorStop(1, "rgba(251,191,36,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(x - f.r * 3, y - f.r * 3, f.r * 6, f.r * 6);
+        ctx.fillStyle = "#f59e0b";
+        ctx.beginPath();
+        ctx.roundRect(x - f.r * 0.55, y - f.r * 0.7, f.r * 1.1, f.r * 1.4, 2);
+        ctx.fill();
+        ctx.fillStyle = "#fde68a";
+        ctx.fillRect(x - f.r * 0.3, y - f.r * 0.35, f.r * 0.6, f.r * 0.7);
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawMotes(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    if (!this.motes.length) return;
+    const autumn = this.season() === "autumn";
+    const cols = autumn ? ["#d97706", "#b45309", "#dc2626", "#ca8a04"] : ["#f9a8d4", "#fbcfe8", "#fde68a", "#86efac"];
+    for (const m of this.motes) {
+      ctx.save();
+      ctx.translate(m.x * width, m.y * height);
+      ctx.rotate(m.ph);
+      ctx.fillStyle = cols[m.c % cols.length];
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, m.r, m.r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  private drawBirds(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    if (!this.birds.length) return;
+    ctx.strokeStyle = "rgba(15, 23, 42, 0.7)";
+    ctx.lineWidth = 1.6;
+    for (const b of this.birds) {
+      const x = b.x * width;
+      const y = b.y * height + Math.sin(b.ph * 0.4) * 3;
+      const w = Math.sin(b.ph) * 4;
+      ctx.beginPath();
+      ctx.moveTo(x - 7, y - w);
+      ctx.quadraticCurveTo(x - 3, y - 3 - w * 0.4, x, y);
+      ctx.quadraticCurveTo(x + 3, y - 3 - w * 0.4, x + 7, y - w);
+      ctx.stroke();
+    }
   }
 
   private updateCamera(dt: number) {
@@ -399,6 +610,8 @@ export class GameEngine {
   private effectiveWeather(): "none" | "rain" | "snow" {
     const slug = this.room.slug;
     if (slug === "restoran" || slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi" || slug === "oyunika" || slug === "sahil-kasabasi" || slug.startsWith("home-")) return "none";
+    if (this.eventTheme === "snow" && this.isOutdoor()) return "snow";
+    if (slug === "kis-koyu") return this.weather === "none" ? "none" : "snow";
     if (this.weather !== "auto") return this.weather;
     const d = new Date();
     const m = d.getMonth();
@@ -436,15 +649,14 @@ export class GameEngine {
   /** Yerel saate göre karartma; lamba/sokak lambası/TV/havuz/kamp ateşi çevresi parlar. */
   private drawNight(ctx: CanvasRenderingContext2D, l: Layout, width: number, height: number) {
     if (!this.nightEnabled || this.room.slug === "oyunika" || this.room.slug === "avm" || this.room.slug === "avm-kat2" || this.room.slug === "emlak-ofisi") return;
-    const d = new Date();
-    const h = d.getHours() + d.getMinutes() / 60;
-    let a = 0;
-    if (h >= 21 || h < 5) a = 0.22;
-    else if (h >= 19) a = ((h - 19) / 2) * 0.22;
-    else if (h < 7) a = ((7 - h) / 2) * 0.22;
-    if (a < 0.02) return;
-    ctx.fillStyle = `rgba(6, 12, 44, ${a})`;
-    ctx.fillRect(0, 0, width, height);
+    const a = lighting.tintAlpha;
+    const glow = lighting.dark;
+    if (a >= 0.01) {
+      const [tr, tg, tb] = lighting.tint;
+      ctx.fillStyle = `rgba(${Math.round(tr)}, ${Math.round(tg)}, ${Math.round(tb)}, ${a})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+    if (glow < 0.15) return;
     for (const f of this.furni) {
       if (f.type !== "lamp" && f.type !== "streetlight" && f.type !== "tv" && f.type !== "fountain" && f.type !== "campfire" && f.type !== "dj_booth") continue;
       const { sx, sy } = gridToScreen(f.gx, f.gy, l);
@@ -462,7 +674,7 @@ export class GameEngine {
               : f.type === "tv"
                 ? "125, 211, 252"
                 : "56, 189, 248";
-      g.addColorStop(0, `rgba(${col}, ${a * 0.95})`);
+      g.addColorStop(0, `rgba(${col}, ${0.21 * glow})`);
       g.addColorStop(1, `rgba(${col}, 0)`);
       ctx.fillStyle = g;
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
@@ -470,6 +682,8 @@ export class GameEngine {
   }
 
   private render(time: number) {
+    const dn = new Date();
+    updateLighting(dn.getHours() + dn.getMinutes() / 60);
     this.resize();
     const { ctx, layout: l, width, height } = this;
     const now = performance.now();
@@ -492,6 +706,25 @@ export class GameEngine {
       const passable = FURNI_BY_TYPE[f.type]?.blocks === false;
       const depth = passable ? f.gx + f.gy - 0.3 : f.gx + (wTiles - 1) / 2 + (f.gy + (hTiles - 1) / 2);
       items.push({ depth, draw: () => drawFurni(ctx, f, l, time) });
+    }
+    for (const c of this.traffic) {
+      items.push({
+        depth: c.x + c.lane + 1,
+        draw: () => {
+          const meta = FURNI_SPRITES[c.type];
+          const img = meta ? sprites.get(meta.src) : null;
+          if (!meta || !img) return;
+          const { sx, sy } = gridToScreen(c.x + 0.5, c.lane, l);
+          const w = meta.drawW * l.scale;
+          const h = meta.drawH * l.scale;
+          const footY = sy + l.tileH * 0.75;
+          ctx.save();
+          ctx.translate(sx, 0);
+          if (c.dir === -1) ctx.scale(-1, 1);
+          ctx.drawImage(img, -w / 2, footY - h + (meta.offsetY ?? 6) * l.scale, w, h);
+          ctx.restore();
+        },
+      });
     }
     for (const [rx, ry] of roomRocks(this.room.slug)) items.push({ depth: rx + ry, draw: () => drawRock(ctx, rx, ry, l) });
     if (this.flag) {
@@ -542,6 +775,9 @@ export class GameEngine {
     }
 
     this.drawNight(ctx, l, width, height);
+    this.drawMotes(ctx, width, height);
+    this.drawEventFx(ctx, width, height);
+    this.drawBirds(ctx, width, height);
     this.drawWeather(ctx, width, height);
   }
 }

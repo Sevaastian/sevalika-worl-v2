@@ -18,3 +18,59 @@ body {
   font-family: var(--font-sans);
   overscroll-behavior: none;
 }
+
+/* ---- v19 arayüz cilası ---- */
+@keyframes swPop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Paneller yumuşakça açılır ve cam efekti alır */
+[class*="bg-slate-900/95"] {
+  animation: swPop 0.18s ease-out;
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow: 0 10px 34px rgba(2, 6, 23, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+button {
+  transition: transform 0.12s ease, background-color 0.15s ease, filter 0.15s ease;
+}
+button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+canvas {
+  touch-action: none;
+}
+
+/* Dokunmatik ekranlarda daha büyük dokunma alanları */
+@media (pointer: coarse) {
+  button {
+    min-height: 34px;
+  }
+  input,
+  select {
+    min-height: 38px;
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="bg-slate-900/95"] {
+    animation: none;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

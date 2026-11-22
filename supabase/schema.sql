@@ -342,7 +342,7 @@ begin
   if me.last_daily_claim is not null and me.last_daily_claim > now() - interval '24 hours' then
     raise exception 'Günlük ödülü zaten aldın.';
   end if;
-  update public.profiles set coins = coins + reward, last_daily_claim = now()
+  update public.profiles set coins = coins + reward * public._event_mult(), last_daily_claim = now()
    where id = me.id returning coins into new_coins;
   perform public._badge_add(me.id, 'login');
   return new_coins;
@@ -510,6 +510,100 @@ begin
    where slug = p_room;
 end $$;
 
+-- v19: Etkinlik sistemi (admin zamanlı etkinlik: Sanil çarpanı, tema, ödül, rozet)
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text not null default '',
+  theme text not null default 'confetti',
+  coin_mult int not null default 1,
+  reward int not null default 0,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  ended boolean not null default false,
+  created_by uuid,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.event_claims (
+  event_id uuid not null references public.events(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  claimed_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+alter table public.events enable row level security;
+alter table public.event_claims enable row level security;
+revoke all on public.events, public.event_claims from anon, authenticated;
+
+-- Aktif etkinliklerin en yüksek Sanil çarpanı (yoksa 1)
+create or replace function public._event_mult() returns int
+language sql stable security definer set search_path = '' as $$
+  select coalesce(max(coin_mult), 1)::int from public.events
+   where not ended and now() between starts_at and ends_at $$;
+
+create or replace function public.active_events() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles;
+begin
+  me := public._me();
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', e.id, 'title', e.title, 'description', e.description, 'theme', e.theme,
+      'coinMult', e.coin_mult, 'reward', e.reward,
+      'startsAt', e.starts_at, 'endsAt', e.ends_at,
+      'active', now() >= e.starts_at,
+      'claimed', exists (select 1 from public.event_claims c where c.event_id = e.id and c.user_id = me.id)
+    ) order by e.starts_at)
+    from public.events e
+    where not e.ended and e.ends_at > now() and e.starts_at < now() + interval '7 days'
+  ), '[]'::jsonb);
+end $$;
+
+create or replace function public.claim_event_reward(p_id uuid) returns int
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; e public.events; n int; new_coins int;
+begin
+  me := public._me();
+  select * into e from public.events where id = p_id and not ended and now() between starts_at and ends_at;
+  if not found then raise exception 'Etkinlik şu an aktif değil.'; end if;
+  if e.reward <= 0 then raise exception 'Bu etkinliğin ödülü yok.'; end if;
+  insert into public.event_claims (event_id, user_id) values (e.id, me.id) on conflict do nothing;
+  get diagnostics n = row_count;
+  if n = 0 then raise exception 'Etkinlik ödülünü zaten aldın.'; end if;
+  update public.profiles set coins = least(coins::bigint + e.reward, 2000000000)::int
+   where id = me.id returning coins into new_coins;
+  perform public._badge_add(me.id, 'event');
+  return new_coins;
+end $$;
+
+create or replace function public.admin_create_event(p_title text, p_desc text, p_theme text, p_mult int, p_reward int, p_start timestamptz, p_hours int)
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; v_title text; v_start timestamptz; v_id uuid; v_theme text;
+begin
+  me := public._require_admin();
+  v_title := left(btrim(coalesce(p_title, '')), 60);
+  if v_title = '' then raise exception 'Etkinlik adı boş olamaz.'; end if;
+  v_theme := coalesce(p_theme, 'confetti');
+  if v_theme not in ('none','confetti','fireworks','lanterns','balloons','snow') then raise exception 'Geçersiz tema.'; end if;
+  if coalesce(p_mult, 1) not between 1 and 5 then raise exception 'Çarpan 1–5 olmalı.'; end if;
+  if coalesce(p_reward, 0) not between 0 and 5000 then raise exception 'Ödül 0–5000 olmalı.'; end if;
+  if coalesce(p_hours, 1) not between 1 and 336 then raise exception 'Süre 1–336 saat olmalı.'; end if;
+  v_start := greatest(coalesce(p_start, now()), now() - interval '1 minute');
+  insert into public.events (title, description, theme, coin_mult, reward, starts_at, ends_at, created_by)
+  values (v_title, left(btrim(coalesce(p_desc, '')), 200), v_theme, coalesce(p_mult, 1), coalesce(p_reward, 0),
+          v_start, v_start + make_interval(hours => coalesce(p_hours, 1)), me.id)
+  returning id into v_id;
+  perform public._emit_event('announce', null, null,
+    jsonb_build_object('text', left('🎉 Etkinlik: ' || v_title || case when v_start > now() + interval '2 minutes' then ' yakında başlıyor!' else ' başladı!' end, 140)), me.username);
+  return v_id;
+end $$;
+
+create or replace function public.admin_end_event(p_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform public._require_admin();
+  update public.events set ended = true where id = p_id;
+end $$;
+
 -- v19: Günlük Şans Çarkı (24 saatte bir; ağırlıklı sunucu taraflı çekiliş)
 alter table public.profiles add column if not exists last_spin timestamptz;
 
@@ -542,9 +636,9 @@ begin
     acc := acc + weights[i];
     if r < acc then idx := i - 1; exit; end if;
   end loop;
-  update public.profiles set coins = coins + prizes[idx + 1], last_spin = now()
+  update public.profiles set coins = coins + prizes[idx + 1] * public._event_mult(), last_spin = now()
    where id = me.id returning coins into new_coins;
-  return jsonb_build_object('index', idx, 'prize', prizes[idx + 1], 'coins', new_coins);
+  return jsonb_build_object('index', idx, 'prize', prizes[idx + 1] * public._event_mult(), 'coins', new_coins);
 end $$;
 
 -- ---------- Admin RPC'leri ---------------------------------------------
@@ -1332,10 +1426,10 @@ begin
     end if;
   end loop;
   if sold = 0 then raise exception 'Satacak balığın yok.'; end if;
-  update public.profiles set inventory = kept, coins = coins + earned where id = me.id returning coins into new_coins;
+  update public.profiles set inventory = kept, coins = coins + earned * public._event_mult() where id = me.id returning coins into new_coins;
   perform public._progress(me.id, 'sell_1', 1);
   perform public._add_xp(me.id, greatest(1, earned / 10));
-  return jsonb_build_object('earned', earned, 'sold', sold, 'coins', new_coins, 'inventory', to_jsonb(kept));
+  return jsonb_build_object('earned', earned * public._event_mult(), 'sold', sold, 'coins', new_coins, 'inventory', to_jsonb(kept));
 end $$;
 
 
@@ -1411,8 +1505,8 @@ begin
   insert into public.achievements (user_id, key) values (p_uid, p_key) on conflict do nothing;
   get diagnostics n = row_count;
   if n > 0 then
-    update public.profiles set coins = least(coins::bigint + 50, 2000000000)::int where id = p_uid;
-    perform public._emit_user_event(p_uid, 'achievement', jsonb_build_object('key', p_key, 'reward', 50));
+    update public.profiles set coins = least(coins::bigint + 50 * public._event_mult(), 2000000000)::int where id = p_uid;
+    perform public._emit_user_event(p_uid, 'achievement', jsonb_build_object('key', p_key, 'reward', 50 * public._event_mult()));
   end if;
 end $$;
 
@@ -1481,7 +1575,7 @@ begin
    where user_id = me.id and day = (now() at time zone 'Europe/Istanbul')::date and key = p_key and progress >= g and not claimed
    returning true into ok;
   if ok is null then raise exception 'Görev tamamlanmadı ya da ödül zaten alındı.'; end if;
-  update public.profiles set coins = least(coins::bigint + public._quest_coins(p_key), 2000000000)::int
+  update public.profiles set coins = least(coins::bigint + public._quest_coins(p_key) * public._event_mult(), 2000000000)::int
    where id = me.id returning coins into new_coins;
   perform public._add_xp(me.id, public._quest_xp(p_key));
   select xp into new_xp from public.profiles where id = me.id;
@@ -1726,7 +1820,8 @@ insert into public.rooms (slug, name, min_role, cols, rows, spawn_x, spawn_y, fu
   ('maden', 'Taş Ocağı Madeni', 'user', 15, 14, 6, 2, '[{"id":"md1","type":"streetlight","gx":2,"gy":2,"rot":0,"owner":null},{"id":"md2","type":"streetlight","gx":13,"gy":4,"rot":0,"owner":null},{"id":"md3","type":"streetlight","gx":2,"gy":10,"rot":0,"owner":null},{"id":"md4","type":"streetlight","gx":11,"gy":10,"rot":0,"owner":null},{"id":"md5","type":"bench","gx":9,"gy":5,"rot":0,"owner":null},{"id":"md6","type":"bin","gx":8,"gy":2,"rot":0,"owner":null},{"id":"md7","type":"campfire","gx":6,"gy":11,"rot":0,"owner":null},{"id":"md8","type":"logseat","gx":5,"gy":11,"rot":0,"owner":null},{"id":"md9","type":"logseat","gx":7,"gy":11,"rot":1,"owner":null},{"id":"maz1","type":"mine_entrance","gx":9,"gy":0,"rot":0,"owner":null},{"id":"maz2","type":"ore_cart","gx":7,"gy":10,"rot":0,"owner":null}]'::jsonb, 10),
 ('avm', '🛍️ Sevalika AVM', 'user', 28, 20, 13, 17, '[{"id":"av_s0","type":"store_fashion","gx":1,"gy":0,"rot":0,"owner":null},{"id":"av_s1","type":"store_tech","gx":6,"gy":0,"rot":0,"owner":null},{"id":"av_s2","type":"store_food","gx":11,"gy":0,"rot":0,"owner":null},{"id":"av_s3","type":"store_fashion","gx":16,"gy":0,"rot":0,"owner":null},{"id":"av_s4","type":"store_tech","gx":21,"gy":0,"rot":0,"owner":null},{"id":"av_p0","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"av_p1","type":"plant","gx":5,"gy":2,"rot":0,"owner":null},{"id":"av_p2","type":"plant","gx":10,"gy":2,"rot":0,"owner":null},{"id":"av_p3","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"av_p4","type":"plant","gx":20,"gy":2,"rot":0,"owner":null},{"id":"av_p5","type":"plant","gx":25,"gy":2,"rot":0,"owner":null},{"id":"av_p6","type":"plant","gx":27,"gy":2,"rot":0,"owner":null},{"id":"av_m1","type":"mannequin","gx":0,"gy":3,"rot":0,"owner":null},{"id":"av_m2","type":"mannequin","gx":5,"gy":3,"rot":0,"owner":null},{"id":"av_m3","type":"mannequin","gx":16,"gy":3,"rot":0,"owner":null},{"id":"av_m4","type":"mannequin","gx":21,"gy":3,"rot":0,"owner":null},{"id":"av_f1","type":"fountain","gx":13,"gy":9,"rot":0,"owner":null},{"id":"av_b0","type":"bench","gx":11,"gy":8,"rot":1,"owner":null},{"id":"av_b1","type":"bench","gx":15,"gy":8,"rot":1,"owner":null},{"id":"av_b2","type":"bench","gx":11,"gy":11,"rot":1,"owner":null},{"id":"av_b3","type":"bench","gx":15,"gy":11,"rot":1,"owner":null},{"id":"av_b4","type":"bench","gx":8,"gy":5,"rot":1,"owner":null},{"id":"av_b5","type":"bench","gx":19,"gy":5,"rot":1,"owner":null},{"id":"av_b6","type":"bench","gx":8,"gy":14,"rot":1,"owner":null},{"id":"av_b7","type":"bench","gx":19,"gy":14,"rot":1,"owner":null},{"id":"av_pl0","type":"plant","gx":7,"gy":9,"rot":0,"owner":null},{"id":"av_pl1","type":"plant","gx":20,"gy":9,"rot":0,"owner":null},{"id":"av_pl2","type":"plant","gx":9,"gy":16,"rot":0,"owner":null},{"id":"av_pl3","type":"plant","gx":18,"gy":16,"rot":0,"owner":null},{"id":"av_pl4","type":"plant","gx":7,"gy":17,"rot":0,"owner":null},{"id":"av_pl5","type":"plant","gx":20,"gy":17,"rot":0,"owner":null},{"id":"av_l0","type":"lamp","gx":6,"gy":3,"rot":0,"owner":null},{"id":"av_l1","type":"lamp","gx":22,"gy":3,"rot":0,"owner":null},{"id":"av_l2","type":"lamp","gx":10,"gy":6,"rot":0,"owner":null},{"id":"av_l3","type":"lamp","gx":17,"gy":6,"rot":0,"owner":null},{"id":"av_l4","type":"lamp","gx":3,"gy":9,"rot":0,"owner":null},{"id":"av_l5","type":"lamp","gx":24,"gy":9,"rot":0,"owner":null},{"id":"av_l6","type":"lamp","gx":3,"gy":15,"rot":0,"owner":null},{"id":"av_l7","type":"lamp","gx":24,"gy":15,"rot":0,"owner":null},{"id":"av_l8","type":"lamp","gx":12,"gy":13,"rot":0,"owner":null},{"id":"av_l9","type":"lamp","gx":14,"gy":13,"rot":0,"owner":null},{"id":"av_t1","type":"table","gx":24,"gy":6,"rot":0,"owner":null},{"id":"av_c1","type":"chair","gx":23,"gy":6,"rot":0,"owner":null},{"id":"av_c2","type":"chair","gx":25,"gy":6,"rot":0,"owner":null},{"id":"av_t2","type":"table","gx":3,"gy":6,"rot":0,"owner":null},{"id":"av_c3","type":"chair","gx":2,"gy":6,"rot":0,"owner":null},{"id":"av_c4","type":"chair","gx":4,"gy":6,"rot":0,"owner":null}]'::jsonb, 10),
   ('avm-kat2', '🛍️ AVM · 2. Kat', 'user', 26, 18, 2, 8, '[{"id":"k2_s0","type":"store_fashion","gx":1,"gy":0,"rot":0,"owner":null},{"id":"k2_s1","type":"store_tech","gx":6,"gy":0,"rot":0,"owner":null},{"id":"k2_s2","type":"store_food","gx":11,"gy":0,"rot":0,"owner":null},{"id":"k2_s3","type":"store_fashion","gx":16,"gy":0,"rot":0,"owner":null},{"id":"k2_s4","type":"store_food","gx":21,"gy":0,"rot":0,"owner":null},{"id":"k2_p0","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"k2_p1","type":"plant","gx":5,"gy":2,"rot":0,"owner":null},{"id":"k2_p2","type":"plant","gx":10,"gy":2,"rot":0,"owner":null},{"id":"k2_p3","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"k2_p4","type":"plant","gx":20,"gy":2,"rot":0,"owner":null},{"id":"k2_p5","type":"plant","gx":25,"gy":2,"rot":0,"owner":null},{"id":"k2_m1","type":"mannequin","gx":9,"gy":3,"rot":0,"owner":null},{"id":"k2_m2","type":"mannequin","gx":15,"gy":3,"rot":0,"owner":null},{"id":"k2_f1","type":"fountain","gx":12,"gy":10,"rot":0,"owner":null},{"id":"k2_b0","type":"bench","gx":10,"gy":9,"rot":0,"owner":null},{"id":"k2_b1","type":"bench","gx":14,"gy":9,"rot":0,"owner":null},{"id":"k2_b2","type":"bench","gx":10,"gy":11,"rot":1,"owner":null},{"id":"k2_b3","type":"bench","gx":14,"gy":11,"rot":1,"owner":null},{"id":"k2_b4","type":"bench","gx":7,"gy":6,"rot":1,"owner":null},{"id":"k2_b5","type":"bench","gx":18,"gy":6,"rot":1,"owner":null},{"id":"k2_b6","type":"bench","gx":7,"gy":13,"rot":1,"owner":null},{"id":"k2_b7","type":"bench","gx":18,"gy":13,"rot":1,"owner":null},{"id":"k2_pl0","type":"plant","gx":3,"gy":7,"rot":0,"owner":null},{"id":"k2_pl1","type":"plant","gx":22,"gy":7,"rot":0,"owner":null},{"id":"k2_pl2","type":"plant","gx":3,"gy":14,"rot":0,"owner":null},{"id":"k2_pl3","type":"plant","gx":22,"gy":14,"rot":0,"owner":null},{"id":"k2_pl4","type":"plant","gx":8,"gy":16,"rot":0,"owner":null},{"id":"k2_pl5","type":"plant","gx":17,"gy":16,"rot":0,"owner":null},{"id":"k2_l0","type":"lamp","gx":2,"gy":3,"rot":0,"owner":null},{"id":"k2_l1","type":"lamp","gx":7,"gy":3,"rot":0,"owner":null},{"id":"k2_l2","type":"lamp","gx":13,"gy":3,"rot":0,"owner":null},{"id":"k2_l3","type":"lamp","gx":18,"gy":3,"rot":0,"owner":null},{"id":"k2_l4","type":"lamp","gx":23,"gy":3,"rot":0,"owner":null},{"id":"k2_l5","type":"lamp","gx":5,"gy":9,"rot":0,"owner":null},{"id":"k2_l6","type":"lamp","gx":20,"gy":9,"rot":0,"owner":null},{"id":"k2_l7","type":"lamp","gx":5,"gy":12,"rot":0,"owner":null},{"id":"k2_l8","type":"lamp","gx":20,"gy":12,"rot":0,"owner":null},{"id":"k2_l9","type":"lamp","gx":12,"gy":15,"rot":0,"owner":null},{"id":"k2_l10","type":"lamp","gx":13,"gy":15,"rot":0,"owner":null},{"id":"k2_t1","type":"table","gx":23,"gy":9,"rot":0,"owner":null},{"id":"k2_c1","type":"chair","gx":22,"gy":9,"rot":0,"owner":null},{"id":"k2_c2","type":"chair","gx":24,"gy":9,"rot":0,"owner":null},{"id":"k2_t2","type":"table","gx":2,"gy":10,"rot":0,"owner":null},{"id":"k2_c3","type":"chair","gx":1,"gy":10,"rot":0,"owner":null},{"id":"k2_c4","type":"chair","gx":3,"gy":10,"rot":0,"owner":null}]'::jsonb, 10),
-  ('emlak-ofisi', '🏡 Emlak Ofisi', 'user', 16, 12, 8, 10, '[{"id":"em1","type":"counter","gx":6,"gy":4,"rot":0,"owner":null},{"id":"em2","type":"counter","gx":7,"gy":4,"rot":0,"owner":null},{"id":"em3","type":"counter","gx":8,"gy":4,"rot":0,"owner":null},{"id":"em4","type":"counter","gx":9,"gy":4,"rot":0,"owner":null},{"id":"em5","type":"counter","gx":10,"gy":4,"rot":0,"owner":null},{"id":"em6","type":"billboard","gx":7,"gy":1,"rot":0,"owner":null},{"id":"em7","type":"bookshelf","gx":1,"gy":1,"rot":0,"owner":null},{"id":"em8","type":"bookshelf","gx":2,"gy":1,"rot":0,"owner":null},{"id":"em9","type":"bookshelf","gx":13,"gy":1,"rot":0,"owner":null},{"id":"em10","type":"bookshelf","gx":14,"gy":1,"rot":0,"owner":null},{"id":"em11","type":"lamp","gx":5,"gy":3,"rot":0,"owner":null},{"id":"em12","type":"lamp","gx":11,"gy":3,"rot":0,"owner":null},{"id":"em13","type":"sofa","gx":2,"gy":7,"rot":0,"owner":null},{"id":"em14","type":"sofa","gx":3,"gy":7,"rot":0,"owner":null},{"id":"em15","type":"table","gx":2,"gy":8,"rot":0,"owner":null},{"id":"em16","type":"sofa","gx":12,"gy":7,"rot":0,"owner":null},{"id":"em17","type":"sofa","gx":13,"gy":7,"rot":0,"owner":null},{"id":"em18","type":"table","gx":13,"gy":8,"rot":0,"owner":null},{"id":"em19","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"em20","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"em21","type":"plant","gx":0,"gy":10,"rot":0,"owner":null},{"id":"em22","type":"plant","gx":15,"gy":10,"rot":0,"owner":null},{"id":"em23","type":"plant","gx":5,"gy":8,"rot":0,"owner":null},{"id":"em24","type":"plant","gx":10,"gy":8,"rot":0,"owner":null},{"id":"em25","type":"rug","gx":7,"gy":8,"rot":0,"owner":null},{"id":"em26","type":"rug","gx":8,"gy":8,"rot":0,"owner":null},{"id":"em27","type":"rug","gx":9,"gy":8,"rot":0,"owner":null},{"id":"em28","type":"rug","gx":7,"gy":9,"rot":0,"owner":null},{"id":"em29","type":"rug","gx":8,"gy":9,"rot":0,"owner":null},{"id":"em30","type":"rug","gx":9,"gy":9,"rot":0,"owner":null}]'::jsonb, 14)
+  ('emlak-ofisi', '🏡 Emlak Ofisi', 'user', 16, 12, 8, 10, '[{"id":"em1","type":"counter","gx":6,"gy":4,"rot":0,"owner":null},{"id":"em2","type":"counter","gx":7,"gy":4,"rot":0,"owner":null},{"id":"em3","type":"counter","gx":8,"gy":4,"rot":0,"owner":null},{"id":"em4","type":"counter","gx":9,"gy":4,"rot":0,"owner":null},{"id":"em5","type":"counter","gx":10,"gy":4,"rot":0,"owner":null},{"id":"em6","type":"billboard","gx":7,"gy":1,"rot":0,"owner":null},{"id":"em7","type":"bookshelf","gx":1,"gy":1,"rot":0,"owner":null},{"id":"em8","type":"bookshelf","gx":2,"gy":1,"rot":0,"owner":null},{"id":"em9","type":"bookshelf","gx":13,"gy":1,"rot":0,"owner":null},{"id":"em10","type":"bookshelf","gx":14,"gy":1,"rot":0,"owner":null},{"id":"em11","type":"lamp","gx":5,"gy":3,"rot":0,"owner":null},{"id":"em12","type":"lamp","gx":11,"gy":3,"rot":0,"owner":null},{"id":"em13","type":"sofa","gx":2,"gy":7,"rot":0,"owner":null},{"id":"em14","type":"sofa","gx":3,"gy":7,"rot":0,"owner":null},{"id":"em15","type":"table","gx":2,"gy":8,"rot":0,"owner":null},{"id":"em16","type":"sofa","gx":12,"gy":7,"rot":0,"owner":null},{"id":"em17","type":"sofa","gx":13,"gy":7,"rot":0,"owner":null},{"id":"em18","type":"table","gx":13,"gy":8,"rot":0,"owner":null},{"id":"em19","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"em20","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"em21","type":"plant","gx":0,"gy":10,"rot":0,"owner":null},{"id":"em22","type":"plant","gx":15,"gy":10,"rot":0,"owner":null},{"id":"em23","type":"plant","gx":5,"gy":8,"rot":0,"owner":null},{"id":"em24","type":"plant","gx":10,"gy":8,"rot":0,"owner":null},{"id":"em25","type":"rug","gx":7,"gy":8,"rot":0,"owner":null},{"id":"em26","type":"rug","gx":8,"gy":8,"rot":0,"owner":null},{"id":"em27","type":"rug","gx":9,"gy":8,"rot":0,"owner":null},{"id":"em28","type":"rug","gx":7,"gy":9,"rot":0,"owner":null},{"id":"em29","type":"rug","gx":8,"gy":9,"rot":0,"owner":null},{"id":"em30","type":"rug","gx":9,"gy":9,"rot":0,"owner":null}]'::jsonb, 14),
+('kis-koyu', '❄️ Kış Köyü', 'user', 22, 16, 2, 8, '[{"id":"kk1","type":"campfire","gx":6,"gy":8,"rot":0,"owner":null},{"id":"kk2","type":"logseat","gx":6,"gy":7,"rot":0,"owner":null},{"id":"kk3","type":"logseat","gx":5,"gy":8,"rot":0,"owner":null},{"id":"kk4","type":"logseat","gx":7,"gy":8,"rot":0,"owner":null},{"id":"kk5","type":"logseat","gx":6,"gy":9,"rot":0,"owner":null},{"id":"kk6","type":"tree","gx":1,"gy":1,"rot":0,"owner":null},{"id":"kk7","type":"tree","gx":4,"gy":1,"rot":0,"owner":null},{"id":"kk8","type":"tree","gx":8,"gy":1,"rot":0,"owner":null},{"id":"kk9","type":"tree","gx":12,"gy":1,"rot":0,"owner":null},{"id":"kk10","type":"tree","gx":16,"gy":1,"rot":0,"owner":null},{"id":"kk11","type":"tree","gx":20,"gy":1,"rot":0,"owner":null},{"id":"kk12","type":"tree","gx":1,"gy":14,"rot":0,"owner":null},{"id":"kk13","type":"tree","gx":20,"gy":14,"rot":0,"owner":null},{"id":"kk14","type":"tree","gx":9,"gy":13,"rot":0,"owner":null},{"id":"kk15","type":"tree","gx":3,"gy":5,"rot":0,"owner":null},{"id":"kk16","type":"kiosk","gx":3,"gy":11,"rot":0,"owner":null},{"id":"kk17","type":"stall_red","gx":5,"gy":12,"rot":0,"owner":null},{"id":"kk18","type":"table","gx":8,"gy":11,"rot":0,"owner":null},{"id":"kk19","type":"chair","gx":7,"gy":11,"rot":0,"owner":null},{"id":"kk20","type":"chair","gx":9,"gy":11,"rot":0,"owner":null},{"id":"kk21","type":"table","gx":11,"gy":10,"rot":0,"owner":null},{"id":"kk22","type":"chair","gx":10,"gy":10,"rot":0,"owner":null},{"id":"kk23","type":"chair","gx":12,"gy":10,"rot":0,"owner":null},{"id":"kk24","type":"bench","gx":11,"gy":3,"rot":0,"owner":null},{"id":"kk25","type":"bench","gx":13,"gy":3,"rot":0,"owner":null},{"id":"kk26","type":"bench","gx":15,"gy":3,"rot":0,"owner":null},{"id":"kk27","type":"bench","gx":17,"gy":3,"rot":0,"owner":null},{"id":"kk28","type":"bench","gx":12,"gy":12,"rot":1,"owner":null},{"id":"kk29","type":"bench","gx":14,"gy":12,"rot":1,"owner":null},{"id":"kk30","type":"bench","gx":16,"gy":12,"rot":1,"owner":null},{"id":"kk31","type":"lamp","gx":10,"gy":4,"rot":0,"owner":null},{"id":"kk32","type":"lamp","gx":19,"gy":4,"rot":0,"owner":null},{"id":"kk33","type":"lamp","gx":10,"gy":11,"rot":0,"owner":null},{"id":"kk34","type":"lamp","gx":19,"gy":11,"rot":0,"owner":null},{"id":"kk35","type":"streetlight","gx":2,"gy":6,"rot":0,"owner":null},{"id":"kk36","type":"streetlight","gx":2,"gy":10,"rot":0,"owner":null},{"id":"kk37","type":"streetlight","gx":9,"gy":7,"rot":0,"owner":null},{"id":"kk38","type":"streetlight","gx":9,"gy":9,"rot":0,"owner":null},{"id":"kk39","type":"bin","gx":20,"gy":7,"rot":0,"owner":null},{"id":"kk40","type":"bin","gx":4,"gy":12,"rot":0,"owner":null},{"id":"kk41","type":"plant","gx":20,"gy":9,"rot":0,"owner":null},{"id":"kk42","type":"plant","gx":18,"gy":14,"rot":0,"owner":null},{"id":"kk43","type":"fountain","gx":21,"gy":8,"rot":0,"owner":null}]'::jsonb, 1)
 on conflict (slug) do update set
   name = excluded.name, min_role = excluded.min_role,
   furni = case when public.rooms.cols is distinct from excluded.cols or public.rooms.rows is distinct from excluded.rows
@@ -1853,10 +1948,10 @@ begin
     end if;
   end loop;
   if sold = 0 then raise exception 'Satacak balığın yok.'; end if;
-  update public.profiles set inventory = kept, coins = coins + earned where id = me.id returning coins into new_coins;
+  update public.profiles set inventory = kept, coins = coins + earned * public._event_mult() where id = me.id returning coins into new_coins;
   perform public._progress(me.id, 'sell_1', 1);
   perform public._add_xp(me.id, greatest(1, earned / 10));
-  return jsonb_build_object('earned', earned, 'sold', sold, 'coins', new_coins, 'inventory', to_jsonb(kept));
+  return jsonb_build_object('earned', earned * public._event_mult(), 'sold', sold, 'coins', new_coins, 'inventory', to_jsonb(kept));
 end $$;
 
 -- ----- Maden -----
@@ -1913,10 +2008,10 @@ begin
     end if;
   end loop;
   if sold = 0 then raise exception 'Satacak ürünün yok.'; end if;
-  update public.profiles set inventory = kept, coins = least(coins::bigint + earned, 2000000000)::int where id = me.id returning coins into new_coins;
+  update public.profiles set inventory = kept, coins = least(coins::bigint + earned::bigint * public._event_mult(), 2000000000)::int where id = me.id returning coins into new_coins;
   perform public._progress(me.id, 'sell_1', 1);
   perform public._add_xp(me.id, greatest(1, earned / 10));
-  return jsonb_build_object('earned', earned, 'sold', sold, 'coins', new_coins, 'inventory', to_jsonb(kept));
+  return jsonb_build_object('earned', earned * public._event_mult(), 'sold', sold, 'coins', new_coins, 'inventory', to_jsonb(kept));
 end $$;
 
 -- ----- Çiftlik -----
@@ -2473,6 +2568,7 @@ language sql immutable set search_path = '' as $$
     when 'cook' then array[1,50,500]   when 'trade' then array[1,25,250] when 'shop' then array[1,20,200]
     when 'quiz' then array[1,10,100]   when 'win' then array[1,10,100]   when 'friend' then array[1,10,50]
     when 'like' then array[1,25,250]   when 'login' then array[1,30,100]
+    when 'event' then array[1,5,20]
     else null end $$;
 
 create or replace function public._badge_reward(p_tier int) returns int
@@ -2723,7 +2819,7 @@ begin
                          'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni',
                          'admin_set_role','admin_gift','admin_kick','admin_announce','admin_dance','admin_clear_room',
                          'send_chat','roll_dice','heartbeat','friend_request','friend_respond','friend_remove','get_friends',
-                         'gift_coins','gift_item','nudge_furni','wheel_status','spin_wheel','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
+                         'gift_coins','gift_item','nudge_furni','_event_mult','active_events','claim_event_reward','admin_create_event','admin_end_event','wheel_status','spin_wheel','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
                          'admin_start_quiz','answer_quiz','admin_mute','admin_unmute','admin_ban','admin_unban',
                          'report_player','admin_list_reports','admin_close_report','admin_get_log',
                          'fish_price','buy_fishing_rod','equip_tool','catch_fish','sell_fish',
@@ -2740,6 +2836,10 @@ grant execute on function public.username_available(text) to anon, authenticated
 grant execute on function public.get_my_profile()                               to authenticated;
 grant execute on function public.claim_daily()                                  to authenticated;
 grant execute on function public.wheel_status()                                 to authenticated;
+grant execute on function public.active_events()                                to authenticated;
+grant execute on function public.claim_event_reward(uuid)                       to authenticated;
+grant execute on function public.admin_create_event(text, text, text, int, int, timestamptz, int) to authenticated;
+grant execute on function public.admin_end_event(uuid)                          to authenticated;
 grant execute on function public.spin_wheel()                                   to authenticated;
 grant execute on function public.set_look(text, text, text)                     to authenticated;
 grant execute on function public.buy_and_place_furni(text, text, int, int, int) to authenticated;

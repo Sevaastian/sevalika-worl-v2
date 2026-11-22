@@ -124,6 +124,8 @@ export interface Player extends Look {
   tool?: string | null;
   pet?: string | null;
   isFishing?: boolean;
+  /** Şu an oynayan emote (kol animasyonu için): 👋 sallama, 👏 alkış vb. */
+  emoteAnim?: string | null;
   /** Katmanlı (PNG parça) karakter görünümü */
   layered?: boolean;
   /** Bakış yönü: 0=GD(+gx) 1=GB(+gy) 2=KB(-gx) 3=KD(-gy) */
@@ -392,4 +394,19 @@ export interface OyunikaState {
   lastDice: [number, number] | null;
   lastEventText: string | null;
   winner: string | null;
+}
+
+export type EventTheme = "none" | "confetti" | "fireworks" | "lanterns" | "balloons" | "snow";
+
+export interface GameEvent {
+  id: string;
+  title: string;
+  description: string;
+  theme: EventTheme;
+  coinMult: number;
+  reward: number;
+  startsAt: string;
+  endsAt: string;
+  active: boolean;
+  claimed: boolean;
 }

@@ -32,6 +32,8 @@ import {
   WHEEL_PRIZES,
 } from "./constants";
 import type {
+  GameEvent,
+  EventTheme,
   BjState,
   DiceResult,
   FarmPlot,
@@ -69,6 +71,10 @@ export interface Backend {
   signOut(): Promise<void>;
   getProfile(): Promise<Profile>;
   claimDaily(): Promise<number>;
+  activeEvents(): Promise<GameEvent[]>;
+  claimEventReward(id: string): Promise<number>;
+  adminCreateEvent(e: { title: string; description: string; theme: EventTheme; mult: number; reward: number; hours: number; startInMin: number }): Promise<void>;
+  adminEndEvent(id: string): Promise<void>;
   wheelStatus(): Promise<{ ready: boolean; seconds: number }>;
   spinWheel(): Promise<{ index: number; prize: number; coins: number }>;
   setLook(look: ColorLook): Promise<void>;
@@ -342,6 +348,22 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
 
     getProfile,
     claimDaily: () => rpc<number>("claim_daily"),
+    activeEvents: () => rpc<GameEvent[]>("active_events"),
+    claimEventReward: (id) => rpc<number>("claim_event_reward", { p_id: id }),
+    adminCreateEvent: async (e) => {
+      await rpc("admin_create_event", {
+        p_title: e.title,
+        p_desc: e.description,
+        p_theme: e.theme,
+        p_mult: e.mult,
+        p_reward: e.reward,
+        p_start: new Date(Date.now() + e.startInMin * 60000).toISOString(),
+        p_hours: e.hours,
+      });
+    },
+    adminEndEvent: async (id) => {
+      await rpc("admin_end_event", { p_id: id });
+    },
     wheelStatus: () => rpc<{ ready: boolean; seconds: number }>("wheel_status"),
     spinWheel: () => rpc<{ index: number; prize: number; coins: number }>("spin_wheel"),
     async setLook(l) {
@@ -679,6 +701,12 @@ function createDemoBackend(): Backend {
   const badgeCount = new Map<string, number>();
   const badgeOwned: string[] = [];
   let wheelAt = 0;
+  const demoEvents: (GameEvent & { ended: boolean })[] = [];
+  const demoClaims = new Set<string>();
+  const evMult = () => {
+    const now = Date.now();
+    return demoEvents.reduce((m, e) => (!e.ended && new Date(e.startsAt).getTime() <= now && new Date(e.endsAt).getTime() > now ? Math.max(m, e.coinMult) : m), 1);
+  };
   const bump = (key: string, n = 1) => {
     const th = BADGE_BY_KEY[key]?.thresholds;
     if (!th) return;
@@ -811,6 +839,44 @@ function createDemoBackend(): Backend {
     async getProfile() {
       return { ...need() };
     },
+    async activeEvents() {
+      const now = Date.now();
+      return demoEvents
+        .filter((e) => !e.ended && new Date(e.endsAt).getTime() > now)
+        .map(({ ended: _ended, ...e }) => ({ ...e, active: new Date(e.startsAt).getTime() <= now, claimed: demoClaims.has(e.id) }));
+    },
+    async claimEventReward(id) {
+      const p = need();
+      const e = demoEvents.find((x) => x.id === id);
+      if (!e || e.ended || new Date(e.startsAt).getTime() > Date.now()) throw new Error("Etkinlik şu an aktif değil.");
+      if (e.reward <= 0) throw new Error("Bu etkinliğin ödülü yok.");
+      if (demoClaims.has(id)) throw new Error("Etkinlik ödülünü zaten aldın.");
+      demoClaims.add(id);
+      p.coins += e.reward;
+      return p.coins;
+    },
+    async adminCreateEvent(e) {
+      const p = need();
+      if (p.role !== "admin") throw new Error("Bu işlem için admin yetkisi gerekli.");
+      const start = Date.now() + e.startInMin * 60000;
+      demoEvents.push({
+        id: `ev_${Date.now()}`,
+        title: e.title.slice(0, 60),
+        description: e.description.slice(0, 200),
+        theme: e.theme,
+        coinMult: Math.max(1, Math.min(5, e.mult)),
+        reward: Math.max(0, Math.min(5000, e.reward)),
+        startsAt: new Date(start).toISOString(),
+        endsAt: new Date(start + e.hours * 3600000).toISOString(),
+        active: false,
+        claimed: false,
+        ended: false,
+      });
+    },
+    async adminEndEvent(id) {
+      const e = demoEvents.find((x) => x.id === id);
+      if (e) e.ended = true;
+    },
     async wheelStatus() {
       const left = Math.max(0, Math.ceil((wheelAt + 86400000 - Date.now()) / 1000));
       return { ready: left === 0, seconds: left };
@@ -828,7 +894,7 @@ function createDemoBackend(): Backend {
           break;
         }
       }
-      const prize = WHEEL_PRIZES[index];
+      const prize = WHEEL_PRIZES[index] * evMult();
       p.coins += prize;
       wheelAt = Date.now();
       return { index, prize, coins: p.coins };
@@ -836,7 +902,7 @@ function createDemoBackend(): Backend {
     async claimDaily() {
       const p = need();
       if (!p.canClaimDaily) throw new Error("Günlük ödülü zaten aldın.");
-      p.coins += 500;
+      p.coins += 500 * evMult();
       p.canClaimDaily = false;
       bump("login");
       return p.coins;

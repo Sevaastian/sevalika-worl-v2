@@ -96,13 +96,18 @@ export function drawLayer(ctx: CanvasRenderingContext2D, spec: LayerSpec, frame:
 
 const KNOWN_HAIR = ["hs_short", "hs_long", "hs_spiky", "hs_bun", "hs_afro", "hs_mohawk", "hs_pony", "hs_curly"];
 
-export function bodyLayers(opts: { skin: string; shirt: string; hair: string; hairStyle: string; back: boolean; legs: boolean }): { under: LayerSpec[]; over: LayerSpec[] } {
+const LAYERED_TOPS = ['tp_hoodie', 'tp_stripe', 'tp_suit', 'tp_jersey', 'tp_overalls', 'tp_hawaii'];
+/** Katmanlı PNG'si olan üst kıyafet mi? (yoksa vektör çizim kullanılır) */
+export const hasLayeredTop = (id: string | null | undefined) => !!id && LAYERED_TOPS.includes(id);
+
+export function bodyLayers(opts: { skin: string; shirt: string; hair: string; hairStyle: string; back: boolean; legs: boolean; top?: string | null }): { under: LayerSpec[]; over: LayerSpec[] } {
   const base = "/sprites/avatar/";
   const style = KNOWN_HAIR.includes(opts.hairStyle) ? opts.hairStyle : "hs_short";
   const under: LayerSpec[] = [];
   if (opts.legs) under.push({ src: base + "legs.png", tint: null, animated: true });
   under.push({ src: base + "body.png", tint: opts.skin, animated: true });
   under.push({ src: base + "shirt.png", tint: opts.shirt, animated: true });
+  if (hasLayeredTop(opts.top)) under.push({ src: base + `top_${opts.top}.png`, tint: null, animated: true });
   const over: LayerSpec[] = [{ src: base + `${style}${opts.back ? "_b" : ""}.png`, tint: opts.hair, animated: false }];
   if (!opts.back) over.push({ src: base + "face.png", tint: null, animated: true });
   return { under, over };

@@ -99,7 +99,52 @@ def face():
         rect(d, off, 1, -37.2, 3, .9, (120, 60, 60, 200), .4)
     save(img, "face.png")
 
+
+def C(h, a=255):
+    h = h.lstrip("#"); return (int(h[0:2],16), int(h[2:4],16), int(h[4:6],16), a)
+
+def top(name, draw_fn):
+    img = new()
+    for i in range(N):
+        d, off = frame(img, i); sw = math.sin(phases[i]) * 6 if i else 0
+        draw_fn(d, off, sw)
+    save(img, f"top_{name}.png")
+
+def torso(d, off, col, sleeve_len=10, sw=0):
+    rect(d, off, -9, -32, 18, 20, col, 4)
+    rect(d, off, -11.8, -31 - sw * .5, 3.2, sleeve_len, col, 1.2)
+    rect(d, off, 8.6, -31 + sw * .5, 3.2, sleeve_len, col, 1.2)
+
+def tops():
+    def hoodie(d, off, sw):
+        torso(d, off, C("#475569"), 10, sw)
+        rect(d, off, -6, -21, 12, 6, C("#334155"), 2)
+        circ(d, off, 0, -32, 7.5, C("#64748b"))
+        rect(d, off, -2.6, -29, 1, 7, C("#f1f5f9")); rect(d, off, 1.6, -29, 1, 7, C("#f1f5f9"))
+    def stripe(d, off, sw):
+        for y in range(0, 20, 5): rect(d, off, -9, -32 + y, 18, 2.4, C("#f8fafc", 235), 0)
+    def suit(d, off, sw):
+        torso(d, off, C("#1f2937"), 11, sw)
+        poly(d, off, [(-3.6, -32), (3.6, -32), (0, -20)], C("#f8fafc"))
+        poly(d, off, [(-1.2, -31), (1.2, -31), (1.8, -23), (0, -20.5), (-1.8, -23)], C("#dc2626"))
+    def jersey(d, off, sw):
+        torso(d, off, C("#16a34a"), 6, sw)
+        rect(d, off, -9, -32, 2.6, 20, C("#facc15")); rect(d, off, 6.4, -32, 2.6, 20, C("#facc15"))
+        circ(d, off, 0, -24, 3.2, C("#ffffff")); rect(d, off, -.6, -27, 1.2, 6, C("#16a34a"))
+    def overalls(d, off, sw):
+        rect(d, off, -9, -24, 18, 12, C("#2563eb"), 4)
+        rect(d, off, -6.6, -32, 2.4, 9, C("#2563eb")); rect(d, off, 4.2, -32, 2.4, 9, C("#2563eb"))
+        rect(d, off, -4, -27, 8, 5, C("#1d4ed8"))
+        circ(d, off, -5.4, -24.5, 1, C("#facc15")); circ(d, off, 5.4, -24.5, 1, C("#facc15"))
+    def hawaii(d, off, sw):
+        torso(d, off, C("#0ea5e9"), 6, sw)
+        for x, y in [(-5, 4), (2, 2), (5, 9), (-3, 12), (0, 7)]: circ(d, off, x, -32 + y, 1.7, C("#fde047"))
+        circ(d, off, -6, -23, 1.4, C("#fb7185")); circ(d, off, 4, -18, 1.4, C("#fb7185"))
+    for n, f in [("tp_hoodie", hoodie), ("tp_stripe", stripe), ("tp_suit", suit), ("tp_jersey", jersey), ("tp_overalls", overalls), ("tp_hawaii", hawaii)]:
+        top(n, f)
+
 os.makedirs(OUT, exist_ok=True)
+tops()
 legs(); body(); shirt(); face()
 for s in ["hs_short", "hs_long", "hs_spiky", "hs_bun", "hs_afro", "hs_mohawk", "hs_pony", "hs_curly"]:
     hair(s); hair(s, True)

@@ -1,5 +1,6 @@
 "use client";
 
+import { EventBanner, EventsPanel } from "./EventPanels";
 import { getLayeredPref, setLayeredPref } from "@/lib/avatarLayers";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { backend, isBlocked, supabase } from "@/lib/backend";
@@ -38,6 +39,7 @@ import { inGrid } from "@/lib/iso";
 import { AmbientMusic } from "@/lib/music";
 import { RoomNetwork, type ConnStatus, type NetHandlers, type PresenceState } from "@/lib/network";
 import type {
+  GameEvent,
   ActiveQuiz,
   AdminEvent,
   BjState,
@@ -1303,6 +1305,40 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     [notify],
   );
 
+  /* ---------------- Etkinlikler ---------------- */
+  const [events, setEvents] = useState<GameEvent[]>([]);
+  const seenEvents = useRef<Set<string> | null>(null);
+  const refreshEvents = useCallback(async () => {
+    try {
+      const list = await backend.activeEvents();
+      setEvents(list);
+      const live = list.filter((e) => e.active).map((e) => e.id);
+      if (seenEvents.current) for (const e of list) if (e.active && !seenEvents.current.has(e.id)) notify(`🎉 Etkinlik başladı: ${e.title}`);
+      seenEvents.current = new Set(live);
+      if (engineRef.current) engineRef.current.eventTheme = list.find((e) => e.active)?.theme ?? null;
+    } catch {
+      /* ağ hatası: sonraki turda tekrar dene */
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    const first = window.setTimeout(() => void refreshEvents(), 400);
+    const id = window.setInterval(() => void refreshEvents(), 45000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(id);
+    };
+  }, [refreshEvents]);
+
+  const claimEvent = async (id: string) => {
+    const coins = await act(() => backend.claimEventReward(id));
+    if (coins !== undefined) {
+      updateProfile({ coins });
+      notify("🎁 Etkinlik ödülü hesabına eklendi!");
+      void refreshEvents();
+    }
+  };
+
   const styleRefresh = useRef<() => void>(() => {});
 
   const handleCanvasClick = async (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -2123,6 +2159,9 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-slate-100 select-none overflow-hidden font-sans">
+      <div className="pointer-events-none fixed top-[52px] left-0 right-0 z-30 flex justify-center">
+        <EventBanner events={events} onOpen={() => setPanel("events")} onClaim={claimEvent} />
+      </div>
       <TopBar
         profile={profile}
         roomSlug={roomSlug}
@@ -2389,6 +2428,25 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
           {panel === "quests" && (
             <QuestsPanel profile={profile} quests={quests} tournament={tournament} card={ownCard} onClose={() => setPanel(null)} onClaim={claimQuest} />
+          )}
+          {panel === "events" && (
+            <EventsPanel
+              events={events}
+              isAdmin={isAdmin}
+              onClose={() => setPanel(null)}
+              onClaim={claimEvent}
+              onCreate={async (e) => {
+                const ok = await act(async () => {
+                  await backend.adminCreateEvent(e);
+                  return true;
+                });
+                if (ok) void refreshEvents();
+              }}
+              onEnd={async (id) => {
+                await act(() => backend.adminEndEvent(id));
+                void refreshEvents();
+              }}
+            />
           )}
           {panel === "wheel" && (
             <WheelPanel

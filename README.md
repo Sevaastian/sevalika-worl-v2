@@ -238,3 +238,21 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 
 ### v19 ek 4: Yuvarlak zemin gölgeleri kaldırıldı
 - Eşya/nesnelerin altındaki yuvarlak gölgeler (PNG sprite, vektör çizim ve kayalar) kapatıldı; nesneler havada durmuyor, zemine oturuyor. Geri açmak için `lib/draw.ts` içindeki `NO_SHADOW` sabitini yarı saydam siyaha çevir. Karakter gölgesi kaldı.
+
+### v19 ek 5: Atmosfer güncellemesi (ışık, gölge, hareket, mevsim, Kış Köyü)
+- **Işık:** gün boyu saatlere göre ton: şafak pembesi, öğlen berrak, altın saat turuncusu, alacakaranlık moru, gece laciverti. Lambalar/ateş karardıkça parlar (`lib/ambience.ts`).
+- **Yönlü gölge:** eşya silüeti güneşin yönüne göre yatar (sabah batıya, akşam doğuya), öğlen kısa; geceleri yok. Büyük binalara gölge verilmez.
+- **Hareket:** ağaç/palmiye/bitki rüzgârda sallanır; gündüz kuş sürüleri geçer; Cadde 1'de iki süs aracı yavaşça gider (önlerinde yaya varsa durur).
+- **Mevsimler:** sonbaharda yaprak, ilkbaharda yaprak/çiçek parçacıkları (yağmur yokken); kışın kar zaten vardı.
+- **Karakter:** emote sırasında kol animasyonu (👋 sallama, 👏/🎉/😂 iki kol). Katmanlı modda 6 üst kıyafetin PNG'si (`top_tp_*.png`).
+- **Arayüz:** cam efektli paneller, açılış animasyonu, basma efekti, dokunmatikte büyük dokunma alanı, tuvalde `touch-action: none`.
+- **Yeni oda: ❄️ Kış Köyü** (Cadde 1'in doğu parkındaki kapıdan, (33,17)): buz pateni pisti, kamp ateşi, sıcak içecek köşesi, sürekli kar. Sunucuya `kis-koyu` eklendi.
+- schema.sql'i yeniden çalıştır ve deploy et.
+
+### v19 ek 6: Etkinlik sistemi + profesyonel süvari atı
+- **🎉 Etkinlikler:** üst çubuktaki panelden admin etkinlik başlatır (ad, açıklama, tema, Sanil çarpanı x1–x5, tek seferlik ödül, süre, gecikmeli başlangıç). Oyuncular üstte canlı geri sayımlı şerit görür, ödülü bir kez alır, 🎉 "Şenlik Ruhu" rozeti ilerler.
+- **Sanil çarpanı** (sunucuda): günlük ödül, Şans Çarkı, görev ödülü, başarım, balık/maden satışı. Kumar ve takas etkilenmez.
+- **Temalar:** konfeti, havai fişek, fener, balon, kar (yalnız açık hava odalarında).
+- RPC: `active_events`, `claim_event_reward`, `admin_create_event`, `admin_end_event`, `_event_mult`; tablolar `events`, `event_claims` (RLS kapalı erişim).
+- **Süvari atı:** kestane renkli, gölgeli, eklemli bacaklı, akan yele/kuyruklu, eyer takımlı yeni at; dörtnalda toz. Hız 5.4 → 6.4 kare/sn (yürüme 3.4). Sunucu limiti (7 kare/sn + tolerans) içinde.
+- Üst çubukta etiketler dar ekranda gizlenir, çubuk kaydırılabilir.
