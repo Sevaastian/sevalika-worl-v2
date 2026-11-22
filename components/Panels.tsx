@@ -40,6 +40,8 @@ export function AvatarPanel(props: {
   onShop: () => void;
   onStatus: (text: string) => void;
   onPhoto: () => void;
+  layered: boolean;
+  onToggleLayered: () => void;
   music: boolean;
   onToggleMusic: () => void;
   weather: WeatherMode;
@@ -118,6 +120,9 @@ export function AvatarPanel(props: {
           {props.music ? "🔊 Müzik" : "🔇 Müzik"}
         </button>
       </div>
+      <button onClick={props.onToggleLayered} className={`w-full text-xs py-1.5 rounded font-medium border ${props.layered ? "bg-violet-500/20 text-violet-200 border-violet-400/40" : "bg-slate-800 text-slate-300 border-slate-700"}`}>
+        🎨 Karakter: {props.layered ? "Katmanlı (PNG)" : "Klasik"}
+      </button>
       <button onClick={props.onPhoto} className="w-full bg-sky-500/15 hover:bg-sky-500/25 text-sky-200 border border-sky-400/40 text-xs py-1.5 rounded font-medium">
         📸 Fotoğraf Çek
       </button>
@@ -268,7 +273,7 @@ export function BuildPanel(props: {
         </>
       ) : props.tool === "nudge" ? (
         <div className="text-[11px] text-slate-300 leading-relaxed space-y-1">
-          <div><b className="text-sky-300">Serbest yerleştirme:</b> bir eşyayı tutup kareye bağlı kalmadan istediğin noktaya sürükle.</div>
+          <div><b className="text-sky-300">Serbest yerleştirme:</b> eşyayı tutup istediğin noktaya sürükle. Bırakınca en yakın kareye oturur, içinden geçilmez.</div>
           <div>🖱️ Tekerlek veya <b>+ / −</b>: boyutu değiştir.</div>
           <div><b>0</b> tuşu: konumu ve boyutu sıfırla.</div>
         </div>

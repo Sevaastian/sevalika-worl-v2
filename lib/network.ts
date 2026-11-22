@@ -13,6 +13,7 @@ export interface PresenceState extends Look {
   tool?: string | null;
   pet?: string | null;
   isFishing?: boolean;
+  lay?: boolean;
 }
 
 export type ConnStatus = "connecting" | "connected" | "demo" | "error";
@@ -33,6 +34,18 @@ export interface NetHandlers {
  */
 export class RoomNetwork {
   private channel: RealtimeChannel | null = null;
+  private last: PresenceState | null = null;
+  private closed = false;
+  private retry: ReturnType<typeof setTimeout> | null = null;
+  private retries = 0;
+  private beat: ReturnType<typeof setInterval> | null = null;
+  private onVis = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible" && !this.closed) {
+      // Sekme arka plandan dönünce bağlantıyı doğrula ve varlığı yeniden duyur
+      if (!this.channel) this.connect();
+      else if (this.last) void this.channel.track(this.last);
+    }
+  };
 
   constructor(
     private sb: SupabaseClient | null,
@@ -42,12 +55,37 @@ export class RoomNetwork {
   ) {}
 
   join(initial: PresenceState) {
-    const sb = this.sb;
-    if (!sb) {
+    if (!this.sb) {
       this.h.onStatus("demo");
       return;
     }
+    this.last = initial;
+    this.closed = false;
+    this.connect();
+    // Presence'ı düzenli tazele: sunucu zaman aşımına uğratsa bile geri gelir
+    this.beat = setInterval(() => {
+      if (this.channel && this.last) void this.channel.track(this.last);
+    }, 20000);
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", this.onVis);
+  }
+
+  private reconnect() {
+    if (this.closed || this.retry) return;
+    const old = this.channel;
+    this.channel = null;
+    if (old && this.sb) void this.sb.removeChannel(old);
+    const wait = Math.min(15000, 1000 * 2 ** this.retries++);
+    this.retry = setTimeout(() => {
+      this.retry = null;
+      if (!this.closed) this.connect();
+    }, wait);
+  }
+
+  private connect() {
+    const sb = this.sb;
+    if (!sb) return;
     this.h.onStatus("connecting");
+    const initial = this.last as PresenceState;
     const ch = sb.channel(`sevalika:${this.slug}`, {
       config: { presence: { key: this.clientId }, broadcast: { self: false } },
     });
@@ -65,10 +103,13 @@ export class RoomNetwork {
       .on("broadcast", { event: "emote" }, ({ payload }) => this.h.onEmote(payload))
       .subscribe(async (status, err) => {
         if (status === "SUBSCRIBED") {
+          this.retries = 0;
           this.h.onStatus("connected");
-          await ch.track(initial);
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-         this.h.onStatus("error");
+          await ch.track(this.last ?? initial);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (this.closed) return;
+          this.h.onStatus("error");
+          this.reconnect();
         }
       });
   }
@@ -78,10 +119,17 @@ export class RoomNetwork {
   }
 
   track(state: PresenceState) {
+    this.last = state;
     void this.channel?.track(state);
   }
 
   leave() {
+    this.closed = true;
+    if (this.retry) clearTimeout(this.retry);
+    this.retry = null;
+    if (this.beat) clearInterval(this.beat);
+    this.beat = null;
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", this.onVis);
     if (this.channel && this.sb) void this.sb.removeChannel(this.channel);
     this.channel = null;
   }

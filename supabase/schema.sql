@@ -477,10 +477,12 @@ begin
   return jsonb_build_object('inventory', to_jsonb(new_inv));
 end $$;
 
--- v19: Serbest konum (piksel kaydırma + ölçek)
-create or replace function public.nudge_furni(p_room text, p_id text, p_ox int, p_oy int, p_sc int default 100) returns void
+-- v19: Serbest konum (piksel kaydırma + ölçek) ve kare güncelleme
+drop function if exists public.nudge_furni(text, text, int, int, int);
+create or replace function public.nudge_furni(p_room text, p_id text, p_ox int, p_oy int, p_sc int default 100,
+                                              p_gx int default null, p_gy int default null) returns void
 language plpgsql security definer set search_path = '' as $$
-declare me public.profiles; r public.rooms; item jsonb; v_ox int; v_oy int; v_sc int;
+declare me public.profiles; r public.rooms; item jsonb; v_ox int; v_oy int; v_sc int; v_gx int; v_gy int; rest jsonb;
 begin
   me := public._me();
   select * into r from public.rooms where slug = p_room for update;
@@ -493,9 +495,16 @@ begin
   v_ox := greatest(-200, least(200, coalesce(p_ox, 0)));
   v_oy := greatest(-200, least(200, coalesce(p_oy, 0)));
   v_sc := greatest(50, least(200, coalesce(p_sc, 100)));
+  v_gx := coalesce(p_gx, (item->>'gx')::int);
+  v_gy := coalesce(p_gy, (item->>'gy')::int);
+  -- Kare değiştiyse yeni kaplanan kareler doğrulanır (sınır, su, çakışma): eşya içinden geçilmesin
+  if v_gx <> (item->>'gx')::int or v_gy <> (item->>'gy')::int then
+    select coalesce(jsonb_agg(f), '[]'::jsonb) into rest from jsonb_array_elements(r.furni) f where f->>'id' <> p_id;
+    perform public._check_place(p_room, rest, item->>'type', v_gx, v_gy, coalesce((item->>'rot')::int, 0));
+  end if;
   update public.rooms
      set furni = (select coalesce(jsonb_agg(case when f->>'id' = p_id
-                    then f || jsonb_build_object('ox', v_ox, 'oy', v_oy, 'sc', v_sc) else f end), '[]'::jsonb)
+                    then f || jsonb_build_object('gx', v_gx, 'gy', v_gy, 'ox', v_ox, 'oy', v_oy, 'sc', v_sc) else f end), '[]'::jsonb)
                   from jsonb_array_elements(furni) f),
          updated_at = now()
    where slug = p_room;
@@ -2697,7 +2706,7 @@ grant execute on function public.set_look(text, text, text)                     
 grant execute on function public.buy_and_place_furni(text, text, int, int, int) to authenticated;
 grant execute on function public.place_from_bag(text, text, int, int, int)      to authenticated;
 grant execute on function public.pickup_furni(text, text)                       to authenticated;
-grant execute on function public.nudge_furni(text, text, int, int, int)            to authenticated;
+grant execute on function public.nudge_furni(text, text, int, int, int, int, int)   to authenticated;
 grant execute on function public.admin_set_role(text, text)                     to authenticated;
 grant execute on function public.admin_gift(text, int)                          to authenticated;
 grant execute on function public.admin_kick(text)                               to authenticated;

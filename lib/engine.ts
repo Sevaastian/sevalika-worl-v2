@@ -178,6 +178,38 @@ export class GameEngine {
     return best;
   }
 
+  /**
+   * Sürükleme bırakılınca: eşyanın görsel konumuna en yakın kareyi bulur, eşyayı o kareye taşır ve
+   * kalan farkı piksel kaydırması olarak bırakır (böylece kapladığı kare ile göründüğü yer uyuşur,
+   * karakterler eşyanın içinden geçemez). Yeni kare geçersizse null döner (eşya değişmez).
+   */
+  settleFurni(f: FurniItem): { gx: number; gy: number; ox: number; oy: number } | null {
+    const ox = f.ox ?? 0;
+    const oy = f.oy ?? 0;
+    const hw = BASE_TILE_W / 2;
+    const hh = BASE_TILE_H / 2;
+    const dgx = Math.round((ox / hw + oy / hh) / 2);
+    const dgy = Math.round((oy / hh - ox / hw) / 2);
+    if (dgx === 0 && dgy === 0) return { gx: f.gx, gy: f.gy, ox, oy };
+    const gx = f.gx + dgx;
+    const gy = f.gy + dgy;
+    const { wTiles, hTiles } = this.getFurniFootprint(f);
+    if (gx < 0 || gy < 0 || gx + wTiles > this.cols || gy + hTiles > this.rows) return null;
+    const isFloor = FURNI_BY_TYPE[f.type]?.floor ?? false;
+    for (let x = gx; x < gx + wTiles; x++) {
+      for (let y = gy; y < gy + hTiles; y++) {
+        if (isWaterTile(this.room.slug, x, y)) return null;
+        if (this.room.portals.some((p) => p.gx === x && p.gy === y)) return null;
+      }
+    }
+    for (const o of this.furni) {
+      if (o.id === f.id || (FURNI_BY_TYPE[o.type]?.floor ?? false) !== isFloor) continue;
+      const fp = this.getFurniFootprint(o);
+      if (o.gx < gx + wTiles && gx < o.gx + fp.wTiles && o.gy < gy + hTiles && gy < o.gy + fp.hTiles) return null;
+    }
+    return { gx, gy, ox: ox - (dgx - dgy) * hw, oy: oy - (dgx + dgy) * hh };
+  }
+
   scaleNow(): number {
     return this.layout.scale;
   }
@@ -455,7 +487,10 @@ export class GameEngine {
       if (FURNI_BY_TYPE[f.type]?.floor) continue;
       const { wTiles, hTiles } = this.getFurniFootprint(f);
       // Çok kareli yapıların derinliği kapladığı alanın merkezine göre sıralanır
-      const depth = f.gx + (wTiles - 1) / 2 + (f.gy + (hTiles - 1) / 2);
+      // Üstünden geçilebilen (blocks:false) eşyalarda karakter eşyanın altında kalıp kaybolmasın:
+      // eşya en arka köşesine göre sıralanır, böylece kapladığı karelerdeki karakter hep önde çizilir.
+      const passable = FURNI_BY_TYPE[f.type]?.blocks === false;
+      const depth = passable ? f.gx + f.gy - 0.3 : f.gx + (wTiles - 1) / 2 + (f.gy + (hTiles - 1) / 2);
       items.push({ depth, draw: () => drawFurni(ctx, f, l, time) });
     }
     for (const [rx, ry] of roomRocks(this.room.slug)) items.push({ depth: rx + ry, draw: () => drawRock(ctx, rx, ry, l) });

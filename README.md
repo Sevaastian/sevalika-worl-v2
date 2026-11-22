@@ -219,3 +219,11 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Eşyaya `ox, oy, sc` alanları eklenir (kayma piksel, ölçek yüzde); çarpışma/kaplanan kareler değişmez, sadece görsel kayar.
 - Sunucu: `nudge_furni(p_room, p_id, p_ox, p_oy, p_sc)` — sahiplik kontrolü pickup ile aynı, değerler ±200 / 50–200 aralığına kısılır.
 - **schema.sql'i yeniden çalıştır** ve yeniden deploy et.
+
+### v19 ek: kaybolma düzeltmeleri, kare yapışması, katmanlı karakter
+- **Eşyaya değince kaybolma:** üstünden geçilebilen eşyalar (bank, koltuk vb.) artık en arka köşesine göre çizilir; karakter eşyanın altında kalıp görünmez olmaz.
+- **Bir süre sonra kaybolma:** `RoomNetwork` kopan kanalı otomatik yeniden bağlar (üstel bekleme), presence'ı 20 sn'de bir ve sekme öne gelince tazeler; oyuncu listeden düşse bile 10 sn tolerans tanınır.
+- **✋ Hizala:** bırakınca eşya en yakın kareye geçer (kaplanan kare = göründüğü yer), geçersizse eski yerine döner. `nudge_furni` artık `p_gx, p_gy` alır ve sunucuda sınır/su/çakışma doğrular.
+- **Katmanlı karakter:** `public/sprites/avatar/` (legs, body, shirt, face, hs_* ve hs_*_b). 5 kareli sheet, kare 160x240. Soldaki panelde "🎨 Karakter" ile açılır; seçim diğer oyunculara presence ile yansır. Parçaları `python3 tools/gen_avatar_layers.py` üretir; kendi PNG'lerinle aynı adla değiştirebilirsin.
+- Şapka/gözlük/sırt/üst kıyafetler katmanlı modda mevcut vektör çizimle üstüne biner.
+- schema.sql'i yeniden çalıştır ve deploy et.

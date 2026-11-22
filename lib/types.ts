@@ -124,6 +124,8 @@ export interface Player extends Look {
   tool?: string | null;
   pet?: string | null;
   isFishing?: boolean;
+  /** Katmanlı (PNG parça) karakter görünümü */
+  layered?: boolean;
   /** Bakış yönü: 0=GD(+gx) 1=GB(+gy) 2=KB(-gx) 3=KD(-gy) */
   dir?: number;
   /** Oturulan eşyanın türü/yönü (motor her karede hesaplar) */

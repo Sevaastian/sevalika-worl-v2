@@ -1,3 +1,4 @@
+import { bodyLayers, drawLayer, layersReady } from "./avatarLayers";
 import { FURNI_BY_TYPE, ROOM_ROCKS, canRideHorse, isWaterTile, oyunikaCellAt } from "./constants";
 import { getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
@@ -2423,7 +2424,23 @@ function drawBack(ctx: Ctx, id: string, ay: number, time: number, moving: boolea
   }
 }
 
+function drawLayeredAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number): boolean {
+  const standing = !p.isSitting && !p.isRidingHorse;
+  const { under, over } = bodyLayers({ skin: p.skinColor, shirt: p.shirtColor, hair: p.hairColor, hairStyle: p.hairStyle, back: FACE_BACK, legs: standing });
+  if (!layersReady([...under, ...over])) return false;
+  const frame = isMoving && standing ? 1 + (Math.floor(time / 150) % 4) : 0;
+  if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
+  for (const l of under) drawLayer(ctx, l, frame, ay);
+  const armSwing = isMoving && standing ? Math.sin(time / 95) * 6 : Math.sin(time / 700) * 0.6;
+  if (p.top) drawTop(ctx, p.top, ay, armSwing, p.shirtColor);
+  for (const l of over) drawLayer(ctx, l, frame, ay);
+  if (p.glasses && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
+  if (p.hat) drawHat(ctx, p.hat, ay);
+  return true;
+}
+
 function drawStandardAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number) {
+  if (p.layered && !p.isNpc && drawLayeredAvatar(ctx, p, ay, isMoving, time)) return;
   if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
   if (!p.isSitting && !p.isRidingHorse) {
     drawAnimatedLegs(ctx, ay, "#1e293b", isMoving, time, 5);

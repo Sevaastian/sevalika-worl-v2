@@ -1,5 +1,6 @@
 "use client";
 
+import { getLayeredPref, setLayeredPref } from "@/lib/avatarLayers";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { backend, isBlocked, supabase } from "@/lib/backend";
 import {
@@ -236,8 +237,19 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       isSitting: me?.isSitting ?? false,
       isDancing: me?.isDancing ?? false,
       isFishing: me?.isFishing ?? false,
+      lay: me?.layered ?? false,
     };
   }, []);
+
+  const [layeredOn, setLayeredOn] = useState(() => getLayeredPref());
+  const toggleLayered = () => {
+    const v = !layeredOn;
+    setLayeredOn(v);
+    setLayeredPref(v);
+    const me = engineRef.current?.me();
+    if (me) me.layered = v;
+    netRef.current?.track(buildPresence());
+  };
 
   const trackPresence = useCallback(() => netRef.current?.track(buildPresence()), [buildPresence]);
 
@@ -721,6 +733,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         tool: p.tool,
         pet: p.pet,
         role: p.role,
+        layered: getLayeredPref(),
         isRidingHorse: wasRiding && canRideHorse(p.role),
       }),
       ...(ROOM_NPCS[roomSlug] ?? []).map((n) =>
@@ -807,13 +820,31 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       },
     );
 
+    const missingSince = new Map<string, number>();
+    const sweep = setInterval(() => {
+      const t = performance.now();
+      for (const [id, since] of missingSince) {
+        if (t - since >= 10000) {
+          missingSince.delete(id);
+          engine.players = engine.players.filter((pl) => pl.id !== id || pl.id === myId);
+        }
+      }
+    }, 2000);
     const handlers: NetHandlers = {
       onStatus: setConn,
 
       onPresence: (list) => {
         setOnlineCount(Math.max(1, list.length));
         const ids = new Set(list.map((s) => s.id));
-        engine.players = engine.players.filter((pl) => pl.id === myId || pl.isNpc || pl.id.startsWith("bot_") || ids.has(pl.id));
+        // Anlık bağlantı titremesinde oyuncu hemen silinmesin: 10 sn tolerans
+        const nowMs = performance.now();
+        for (const id of ids) missingSince.delete(id);
+        engine.players = engine.players.filter((pl) => {
+          if (pl.id === myId || pl.isNpc || pl.id.startsWith("bot_") || ids.has(pl.id)) return true;
+          const since = missingSince.get(pl.id) ?? nowMs;
+          missingSince.set(pl.id, since);
+          return nowMs - since < 10000;
+        });
         const names: string[] = [];
         for (const s of list) {
           if (s.id === myId) continue;
@@ -837,6 +868,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           pl.tool = s.tool === "fishing_rod" ? "fishing_rod" : null;
           pl.pet = cosmetic(s.pet, "pet");
           pl.isFishing = Boolean(s.isFishing);
+          pl.layered = Boolean(s.lay);
           pl.isRidingHorse = Boolean(s.isRidingHorse);
           const cached = profileCache.current.get(name);
           pl.role = cached?.role ?? "user";
@@ -908,6 +940,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     return () => {
       cancelled = true;
       if (wander) clearInterval(wander);
+      clearInterval(sweep);
       unsubRoom();
       unsubChat();
       net.leave();
@@ -1203,11 +1236,25 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   }, []);
 
   const saveNudge = useCallback(
-    async (id: string) => {
-      const it = engineRef.current?.furni.find((f) => f.id === id);
-      if (!it) return;
+    async (id: string, revert?: { ox: number; oy: number }) => {
+      const engine = engineRef.current;
+      const it = engine?.furni.find((f) => f.id === id);
+      if (!engine || !it) return;
+      // Bırakılan noktaya en yakın kareye geç: kapladığı kare görünen yerle aynı olur
+      const spot = engine.settleFurni(it);
+      if (!spot) {
+        it.ox = revert?.ox ?? 0;
+        it.oy = revert?.oy ?? 0;
+        notify("Buraya taşınamaz (dolu, deniz veya kapı karesi).");
+        return;
+      }
+      const moved = spot.gx !== it.gx || spot.gy !== it.gy;
+      it.gx = spot.gx;
+      it.gy = spot.gy;
+      it.ox = spot.ox;
+      it.oy = spot.oy;
       try {
-        await backend.nudgeFurni(roomSlugRef.current, id, it.ox ?? 0, it.oy ?? 0, it.sc ?? 100);
+        await backend.nudgeFurni(roomSlugRef.current, id, spot.ox, spot.oy, it.sc ?? 100, moved ? spot.gx : undefined, moved ? spot.gy : undefined);
       } catch (err) {
         notify(err instanceof Error ? err.message : "Kaydedilemedi.");
         await reloadRoom();
@@ -1398,7 +1445,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     if (!d) return;
     nudgeRef.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    void saveNudge(d.id);
+    void saveNudge(d.id, { ox: d.ox, oy: d.oy });
   };
 
   const handleCanvasMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -2184,6 +2231,8 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onShop={() => setPanel("shop")}
               onStatus={saveStatus}
               onPhoto={takePhoto}
+              layered={layeredOn}
+              onToggleLayered={toggleLayered}
               music={musicOn}
               onToggleMusic={toggleMusic}
               onDance={toggleDance}
