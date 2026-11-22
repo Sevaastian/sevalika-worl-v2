@@ -81,6 +81,7 @@ import { DealerModal, FarmerNpcModal, GuildPanel, MinerNpcModal } from "./WorldP
 import { sfx } from "@/lib/sfx";
 import TopBar, { type PanelKey } from "./TopBar";
 import { usePanelDock } from "./usePanelDock";
+import RoomLoader from "./RoomLoader";
 
 const timeStr = () => {
   const d = new Date();
@@ -2254,6 +2255,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
         </div>
 
+        <RoomLoader key={roomSlug} name={resolveRoom(roomSlug)?.name ?? "Oda"} />
         {quiz && <QuizBanner quiz={quiz} onAnswer={answerQuiz} onExpire={() => setQuiz(null)} />}
 
         <div ref={dockL} className="sw-dock absolute top-2.5 left-2.5 z-10 flex flex-col gap-2 items-start pointer-events-none">
