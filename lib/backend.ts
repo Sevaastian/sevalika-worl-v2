@@ -29,6 +29,7 @@ import {
   homeSlug,
   isHomeSlug,
   resolveRoom,
+  WHEEL_PRIZES,
 } from "./constants";
 import type {
   BjState,
@@ -68,6 +69,8 @@ export interface Backend {
   signOut(): Promise<void>;
   getProfile(): Promise<Profile>;
   claimDaily(): Promise<number>;
+  wheelStatus(): Promise<{ ready: boolean; seconds: number }>;
+  spinWheel(): Promise<{ index: number; prize: number; coins: number }>;
   setLook(look: ColorLook): Promise<void>;
 
   // Oda / eşya
@@ -339,6 +342,8 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
 
     getProfile,
     claimDaily: () => rpc<number>("claim_daily"),
+    wheelStatus: () => rpc<{ ready: boolean; seconds: number }>("wheel_status"),
+    spinWheel: () => rpc<{ index: number; prize: number; coins: number }>("spin_wheel"),
     async setLook(l) {
       await rpc("set_look", { p_shirt: l.shirtColor, p_hair: l.hairColor, p_skin: l.skinColor });
     },
@@ -673,6 +678,7 @@ function createDemoBackend(): Backend {
   };
   const badgeCount = new Map<string, number>();
   const badgeOwned: string[] = [];
+  let wheelAt = 0;
   const bump = (key: string, n = 1) => {
     const th = BADGE_BY_KEY[key]?.thresholds;
     if (!th) return;
@@ -804,6 +810,28 @@ function createDemoBackend(): Backend {
     },
     async getProfile() {
       return { ...need() };
+    },
+    async wheelStatus() {
+      const left = Math.max(0, Math.ceil((wheelAt + 86400000 - Date.now()) / 1000));
+      return { ready: left === 0, seconds: left };
+    },
+    async spinWheel() {
+      const p = need();
+      if (Date.now() - wheelAt < 86400000) throw new Error("Çarkı bugün zaten çevirdin.");
+      const weights = [20, 18, 14, 8, 4, 1, 20, 15];
+      let r = Math.random() * 100;
+      let index = 0;
+      for (let i = 0; i < weights.length; i++) {
+        r -= weights[i];
+        if (r < 0) {
+          index = i;
+          break;
+        }
+      }
+      const prize = WHEEL_PRIZES[index];
+      p.coins += prize;
+      wheelAt = Date.now();
+      return { index, prize, coins: p.coins };
     },
     async claimDaily() {
       const p = need();

@@ -73,7 +73,7 @@ import { ChatBar, ChatLog } from "./ChatUI";
 import { OyunikaHud, OyunikaLobbyModal } from "./OyunikaModal";
 import { AvatarPanel, BagPanel, BuildPanel, ChefNpcModal, FisherNpcModal, PlayerCard } from "./Panels";
 import RoleBadge from "./RoleBadge";
-import { BundleShopPanel, ExpandHomePanel, FriendsPanel, GuidePanel, QuizBanner, RealtorPanel, ShopPanel } from "./SocialPanels";
+import { BundleShopPanel, ExpandHomePanel, FriendsPanel, GuidePanel, QuizBanner, RealtorPanel, ShopPanel, WheelPanel } from "./SocialPanels";
 import { BadgesPanel, CountChip, MarketPanel, ProfileCardModal, QuestsPanel } from "./ProgressPanels";
 import { DealerModal, FarmerNpcModal, GuildPanel, MinerNpcModal } from "./WorldPanels";
 import { sfx } from "@/lib/sfx";
@@ -241,6 +241,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     };
   }, []);
 
+  const [wheelStatus, setWheelStatus] = useState<{ ready: boolean; seconds: number } | null>(null);
   const [layeredOn, setLayeredOn] = useState(() => getLayeredPref());
   const toggleLayered = () => {
     const v = !layeredOn;
@@ -2139,6 +2140,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         onTogglePanel={(k) => {
           if (k === "friends") void refreshFriends();
           if (k === "quests") void loadQuests();
+          if (k === "wheel") void backend.wheelStatus().then(setWheelStatus).catch(() => {});
           if (k === "badges") void backend.getBadges().then(setBadgeState).catch(() => {});
           if (k === "market") void loadMarket();
           if (k === "guild") void loadGuild();
@@ -2387,6 +2389,22 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
           {panel === "quests" && (
             <QuestsPanel profile={profile} quests={quests} tournament={tournament} card={ownCard} onClose={() => setPanel(null)} onClaim={claimQuest} />
+          )}
+          {panel === "wheel" && (
+            <WheelPanel
+              status={wheelStatus}
+              onClose={() => setPanel(null)}
+              onSpin={async () => {
+                const r = await act(() => backend.spinWheel());
+                if (r) {
+                  window.setTimeout(() => {
+                    updateProfile({ coins: r.coins });
+                    setWheelStatus({ ready: false, seconds: 86400 });
+                  }, 4200);
+                }
+                return r;
+              }}
+            />
           )}
           {panel === "badges" && <BadgesPanel profile={profile} state={badgeState} onClose={() => setPanel(null)} onBuy={buyBadge} />}
           {panel === "market" && (

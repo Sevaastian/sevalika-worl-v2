@@ -1932,6 +1932,7 @@ function drawAnimatedLegs(ctx: Ctx, ay: number, legColor: string, isMoving: bool
 }
 
 function drawVistekiis(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number) {
+  if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
   ctx.fillStyle = "#09090b";
   ctx.beginPath();
   ctx.roundRect(-11, ay - 46, 22, 26, 8);
@@ -1957,8 +1958,9 @@ function drawVistekiis(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time:
 
   ctx.fillStyle = "#e2e8f0";
   ctx.fillRect(-8, ay - 21, 16, 1.5);
+  if (p.top) drawTop(ctx, p.top, ay, isMoving ? Math.sin(time / 95) * 6 : 0, "#09090b");
 
-  ctx.fillStyle = "#fed7aa";
+  ctx.fillStyle = p.skinColor || "#fed7aa";
   ctx.beginPath();
   ctx.arc(0, ay - 41, 8.5, 0, Math.PI * 2);
   ctx.fill();
@@ -1971,9 +1973,12 @@ function drawVistekiis(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time:
   ctx.fillRect(6.5, ay - 43, 3.5, 19);
 
   drawEyes(ctx, ay);
+  if (p.glasses && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
+  if (p.hat) drawHat(ctx, p.hat, ay);
 }
 
 function drawSevaastian(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number) {
+  if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
   if (!p.isSitting && !p.isRidingHorse) {
     drawAnimatedLegs(ctx, ay, "#09090b", isMoving, time, 5);
   }
@@ -1990,8 +1995,9 @@ function drawSevaastian(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time
   ctx.lineTo(0, ay - 25);
   ctx.lineTo(3, ay - 32);
   ctx.stroke();
+  if (p.top) drawTop(ctx, p.top, ay, isMoving ? Math.sin(time / 95) * 6 : 0, "#09090b");
 
-  ctx.fillStyle = "#fed7aa";
+  ctx.fillStyle = p.skinColor || "#fed7aa";
   ctx.beginPath();
   ctx.arc(0, ay - 41, 9, 0, Math.PI * 2);
   ctx.fill();
@@ -2011,6 +2017,8 @@ function drawSevaastian(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time
   ctx.fillStyle = "#1e293b";
   ctx.fillRect(-6.3, ay - 42.3, 4.1, 2.3);
   ctx.fillRect(2.2, ay - 42.3, 4.1, 2.3);
+  if (p.glasses && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
+  if (p.hat) drawHat(ctx, p.hat, ay);
 }
 
 function drawHat(ctx: Ctx, hat: string, ay: number) {

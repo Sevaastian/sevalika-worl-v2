@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GUIDE_TOPICS, HOME_SALE_SIZES, HOME_TIERS, homeExpandPrice, COSMETIC_BY_ID, COSMETICS, FURNI_BY_TYPE, HOME_FLOORS, HOME_WALLS, ROOM_BY_SLUG, type BundleDef, type CosmeticSlot } from "@/lib/constants";
+import { WHEEL_PRIZES, GUIDE_TOPICS, HOME_SALE_SIZES, HOME_TIERS, homeExpandPrice, COSMETIC_BY_ID, COSMETICS, FURNI_BY_TYPE, HOME_FLOORS, HOME_WALLS, ROOM_BY_SLUG, type BundleDef, type CosmeticSlot } from "@/lib/constants";
 import type { ActiveQuiz, Friend, HomeAccess, PopularHome, Profile } from "@/lib/types";
 import RoleBadge from "./RoleBadge";
 
@@ -510,6 +510,89 @@ export function GuidePanel(props: { profile: Profile; onClose: () => void; onGif
           {open === i && <p className="px-2.5 pb-2 text-[11px] text-slate-300 leading-snug">{t.text}</p>}
         </div>
       ))}
+    </div>
+  );
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Günlük Şans Çarkı                                                   */
+/* ------------------------------------------------------------------ */
+
+const WHEEL_COLORS = ["#f43f5e", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#eab308", "#14b8a6", "#ec4899"];
+
+export function WheelPanel(props: {
+  status: { ready: boolean; seconds: number } | null;
+  onSpin: () => Promise<{ index: number; prize: number } | undefined>;
+  onClose: () => void;
+}) {
+  const [angle, setAngle] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [won, setWon] = useState<number | null>(null);
+  const n = WHEEL_PRIZES.length;
+  const slice = 360 / n;
+  const ready = props.status?.ready && won === null;
+  const left = props.status?.seconds ?? 0;
+  const hh = Math.floor(left / 3600);
+  const mm = Math.floor((left % 3600) / 60);
+
+  const spin = async () => {
+    if (busy || !ready) return;
+    setBusy(true);
+    const res = await props.onSpin();
+    if (!res) {
+      setBusy(false);
+      return;
+    }
+    // İbre üstte: kazanan dilimin ortası yukarı gelecek şekilde dön
+    setAngle((a) => a + 360 * 5 + (360 - ((a % 360) + res.index * slice + slice / 2)));
+    window.setTimeout(() => {
+      setWon(res.prize);
+      setBusy(false);
+    }, 4200);
+  };
+
+  const polar = (deg: number, r: number) => {
+    const rad = ((deg - 90) * Math.PI) / 180;
+    return [100 + r * Math.cos(rad), 100 + r * Math.sin(rad)];
+  };
+
+  return (
+    <div className="bg-slate-900/95 backdrop-blur border border-fuchsia-400/50 p-3.5 rounded-2xl w-72 md:w-80 space-y-2.5 shadow-2xl">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+        <span className="text-xs font-black text-fuchsia-300 tracking-wide">🎡 GÜNLÜK ŞANS ÇARKI</span>
+        <button onClick={props.onClose} className="text-slate-400 hover:text-white text-sm px-1">
+          ✕
+        </button>
+      </div>
+      <div className="relative mx-auto w-52 h-52">
+        <div className="absolute left-1/2 -top-1 -translate-x-1/2 z-10 text-2xl leading-none drop-shadow">🔻</div>
+        <svg viewBox="0 0 200 200" className="w-full h-full" style={{ transform: `rotate(${angle}deg)`, transition: busy ? "transform 4s cubic-bezier(0.12, 0.7, 0.1, 1)" : "none" }}>
+          {WHEEL_PRIZES.map((v, i) => {
+            const [x1, y1] = polar(i * slice, 96);
+            const [x2, y2] = polar((i + 1) * slice, 96);
+            const [tx, ty] = polar(i * slice + slice / 2, 68);
+            return (
+              <g key={i}>
+                <path d={`M100 100 L${x1} ${y1} A96 96 0 0 1 ${x2} ${y2} Z`} fill={WHEEL_COLORS[i % WHEEL_COLORS.length]} stroke="#0f172a" strokeWidth="2" />
+                <text x={tx} y={ty} fill="#fff" fontSize="14" fontWeight="800" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${i * slice + slice / 2} ${tx} ${ty})`}>
+                  {v}
+                </text>
+              </g>
+            );
+          })}
+          <circle cx="100" cy="100" r="12" fill="#0f172a" stroke="#fde047" strokeWidth="3" />
+        </svg>
+      </div>
+      {won !== null && <div className="text-center text-sm font-black text-yellow-300">🎉 {won} Sanil kazandın!</div>}
+      <button
+        onClick={spin}
+        disabled={!ready || busy}
+        className="w-full bg-fuchsia-500 hover:bg-fuchsia-400 disabled:bg-slate-700 disabled:text-slate-400 text-slate-950 font-black text-sm py-2 rounded-lg transition"
+      >
+        {busy ? "Dönüyor..." : ready ? "Çevir!" : won !== null ? "Yarın tekrar gel" : `Sonraki çevirme: ${hh} sa ${mm} dk`}
+      </button>
+      <div className="text-[10px] text-slate-500 text-center">Her 24 saatte bir ücretsiz. Ödül sunucuda belirlenir.</div>
     </div>
   );
 }

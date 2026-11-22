@@ -5,7 +5,7 @@ import type { ConnStatus } from "@/lib/network";
 import type { Profile } from "@/lib/types";
 import RoleBadge from "./RoleBadge";
 
-export type PanelKey = "bag" | "friends" | "shop" | "quests" | "badges" | "market" | "guild" | "admin";
+export type PanelKey = "bag" | "friends" | "shop" | "quests" | "badges" | "wheel" | "market" | "guild" | "admin";
 
 type ConnKey = "connected" | "connecting" | "demo" | "error";
 
@@ -165,6 +165,16 @@ export default function TopBar({
           }`}
         >
           🎖️ <span className="hidden lg:inline">Rozetler</span>
+        </button>
+
+        <button
+          onClick={() => onTogglePanel("wheel")}
+          title="Günlük Şans Çarkı"
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+            panel === "wheel" ? "bg-fuchsia-400 text-slate-950 border-fuchsia-300" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+          }`}
+        >
+          🎡 <span className="hidden lg:inline">Çark</span>
         </button>
 
         <button

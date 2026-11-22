@@ -231,3 +231,7 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 ### v19 ek 2: Cadde 1 yeniden düzenlendi (layout_v 15)
 - Kafe terası (4 masa takımı), gazete büfeleri, yol kenarı bankları, meydanda çeşme etrafı 8 bank, batı/doğu parklarda kamp ateşi + kütük oturaklar + piknik masaları, doğu kafe, ek arabalar. 116 eşya, kapılar ve NPC kareleri boş.
 - **Dikkat:** layout_v arttığı için schema.sql çalışınca Cadde 1'deki elle yapılan düzenlemeler sıfırlanır.
+
+### v19 ek 3: Sevaastian/Vistekiis eşyaları + Şans Çarkı
+- Admin özel karakterleri (Sevaastian, Vistekiis) artık şapka, gözlük, üst kıyafet ve sırt eşyalarını gösterir; ten rengi uygulanır. İmza siyah kıyafet/saç korunur.
+- 🎡 **Günlük Şans Çarkı:** üst çubukta "Çark". 24 saatte bir, ağırlıklı sunucu çekilişi (20–1000 Sanil). RPC: `wheel_status()`, `spin_wheel()`; `profiles.last_spin`.

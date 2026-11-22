@@ -510,6 +510,43 @@ begin
    where slug = p_room;
 end $$;
 
+-- v19: Günlük Şans Çarkı (24 saatte bir; ağırlıklı sunucu taraflı çekiliş)
+alter table public.profiles add column if not exists last_spin timestamptz;
+
+create or replace function public.wheel_status() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; left_s int;
+begin
+  me := public._me();
+  left_s := case when me.last_spin is null then 0
+                 else greatest(0, ceil(extract(epoch from (me.last_spin + interval '24 hours' - now()))))::int end;
+  return jsonb_build_object('ready', left_s = 0, 'seconds', left_s);
+end $$;
+
+create or replace function public.spin_wheel() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  me public.profiles; r numeric; acc numeric := 0; idx int := 0; i int;
+  prizes constant int[] := array[20,50,100,200,500,1000,30,75];
+  weights constant int[] := array[20,18,14,8,4,1,20,15];
+  new_coins int;
+begin
+  me := public._me();
+  perform 1 from public.profiles where id = me.id for update;
+  select * into me from public.profiles where id = me.id;
+  if me.last_spin is not null and me.last_spin > now() - interval '24 hours' then
+    raise exception 'Çarkı bugün zaten çevirdin.';
+  end if;
+  r := random() * 100;
+  for i in 1 .. array_length(weights, 1) loop
+    acc := acc + weights[i];
+    if r < acc then idx := i - 1; exit; end if;
+  end loop;
+  update public.profiles set coins = coins + prizes[idx + 1], last_spin = now()
+   where id = me.id returning coins into new_coins;
+  return jsonb_build_object('index', idx, 'prize', prizes[idx + 1], 'coins', new_coins);
+end $$;
+
 -- ---------- Admin RPC'leri ---------------------------------------------
 
 create or replace function public.admin_set_role(p_username text, p_role text) returns void
@@ -2686,7 +2723,7 @@ begin
                          'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni',
                          'admin_set_role','admin_gift','admin_kick','admin_announce','admin_dance','admin_clear_room',
                          'send_chat','roll_dice','heartbeat','friend_request','friend_respond','friend_remove','get_friends',
-                         'gift_coins','gift_item','nudge_furni','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
+                         'gift_coins','gift_item','nudge_furni','wheel_status','spin_wheel','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
                          'admin_start_quiz','answer_quiz','admin_mute','admin_unmute','admin_ban','admin_unban',
                          'report_player','admin_list_reports','admin_close_report','admin_get_log',
                          'fish_price','buy_fishing_rod','equip_tool','catch_fish','sell_fish',
@@ -2702,6 +2739,8 @@ end $$;
 grant execute on function public.username_available(text) to anon, authenticated;
 grant execute on function public.get_my_profile()                               to authenticated;
 grant execute on function public.claim_daily()                                  to authenticated;
+grant execute on function public.wheel_status()                                 to authenticated;
+grant execute on function public.spin_wheel()                                   to authenticated;
 grant execute on function public.set_look(text, text, text)                     to authenticated;
 grant execute on function public.buy_and_place_furni(text, text, int, int, int) to authenticated;
 grant execute on function public.place_from_bag(text, text, int, int, int)      to authenticated;

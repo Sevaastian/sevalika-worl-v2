@@ -1090,3 +1090,6 @@ export const BADGES: BadgeDef[] = [
 ];
 export const BADGE_BY_KEY = Object.fromEntries(BADGES.map((b) => [b.key, b])) as Record<string, BadgeDef>;
 export const badgeTier = (th: number[], count: number) => th.filter((t) => count >= t).length;
+
+/** Günlük Şans Çarkı dilimleri (sıra sunucudaki ile aynı olmalı) */
+export const WHEEL_PRIZES = [20, 50, 100, 200, 500, 1000, 30, 75];
