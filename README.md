@@ -256,3 +256,8 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - RPC: `active_events`, `claim_event_reward`, `admin_create_event`, `admin_end_event`, `_event_mult`; tablolar `events`, `event_claims` (RLS kapalı erişim).
 - **Süvari atı:** kestane renkli, gölgeli, eklemli bacaklı, akan yele/kuyruklu, eyer takımlı yeni at; dörtnalda toz. Hız 5.4 → 6.4 kare/sn (yürüme 3.4). Sunucu limiti (7 kare/sn + tolerans) içinde.
 - Üst çubukta etiketler dar ekranda gizlenir, çubuk kaydırılabilir.
+
+### v19 ek 7 — Paneller, giriş ekranı, Cadde geçişi
+- Tüm paneller (sağ ve sol dock) üst şeritlerinden sürüklenebilir (çift tık = sıfırla), ekrana sığmazsa kaydırılır, ince scrollbar, cam/gradyan/gölge ile yeni görünüm (`components/usePanelDock.ts`, `.sw-dock` CSS).
+- Giriş ekranı yeniden tasarlandı (marka alanı, özellikler, ikonlu alanlar, şifre göster/gizle).
+- Cadde/Mekan hızlı geçiş butonları ve arkadaş "git" kısayolu yalnızca admin'e açık (sadece arayüz kısıtı; sunucu tarafı portal denetimi yok).

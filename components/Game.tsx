@@ -80,6 +80,7 @@ import { BadgesPanel, CountChip, MarketPanel, ProfileCardModal, QuestsPanel } fr
 import { DealerModal, FarmerNpcModal, GuildPanel, MinerNpcModal } from "./WorldPanels";
 import { sfx } from "@/lib/sfx";
 import TopBar, { type PanelKey } from "./TopBar";
+import { usePanelDock } from "./usePanelDock";
 
 const timeStr = () => {
   const d = new Date();
@@ -124,6 +125,10 @@ const INITIAL_OYUNIKA: OyunikaState = {
 
 export default function Game({ initialProfile, onLogout }: { initialProfile: Profile; onLogout: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const dockL = useRef<HTMLDivElement | null>(null);
+  const dockR = useRef<HTMLDivElement | null>(null);
+  usePanelDock(dockL);
+  usePanelDock(dockR);
   const engineRef = useRef<GameEngine | null>(null);
   const netRef = useRef<RoomNetwork | null>(null);
   const profileRef = useRef<Profile>(initialProfile);
@@ -2251,7 +2256,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
 
         {quiz && <QuizBanner quiz={quiz} onAnswer={answerQuiz} onExpire={() => setQuiz(null)} />}
 
-        <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-2 items-start max-h-[calc(100%-5rem)] overflow-y-auto">
+        <div ref={dockL} className="sw-dock absolute top-2.5 left-2.5 z-10 flex flex-col gap-2 items-start pointer-events-none">
           {!showAvatar ? (
             <button
               onClick={() => setShowAvatar(true)}
@@ -2314,7 +2319,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
         </div>
 
-        <div className="absolute top-2.5 right-2.5 z-20 flex flex-col gap-2 items-end max-h-[calc(100%-5rem)] overflow-y-auto">
+        <div ref={dockR} className="sw-dock absolute top-2.5 right-2.5 z-20 flex flex-col gap-2 items-end pointer-events-none">
           {roomSlug === "oyunika" && (
             <OyunikaHud
               state={oyunika}
@@ -2414,7 +2419,10 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onAdd={friendRequest}
               onRespond={friendRespond}
               onRemove={friendRemove}
-              onGoto={(s) => void changeRoom(s)}
+              onGoto={(s) => {
+                if (isAdmin || s.startsWith("home-")) void changeRoom(s);
+                else notify("Bu odaya kapılardan yürüyerek gitmelisin.");
+              }}
               onWhisper={(n) => {
                 setChatInput(`/pm ${n} `);
                 setPanel(null);

@@ -76,7 +76,8 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Sabit Cadde 1 + Diğer Oda Sekmeleri */}
+      {/* Hızlı oda geçişi yalnızca admin içindir; oyuncular kapılardan (portallardan) gezer */}
+      {isAdmin ? (
       <div className="flex items-center gap-1 min-w-0 flex-1 max-w-xl">
         <button
           title="Cadde 1"
@@ -107,6 +108,10 @@ export default function TopBar({
           ))}
         </select>
       </div>
+
+      ) : (
+        <div className="flex-1" />
+      )}
 
       {/* Sağ araçlar */}
       <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar">
