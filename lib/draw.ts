@@ -654,6 +654,172 @@ function drawSahilKasabasiExtras(ctx: Ctx, l: Layout, time: number) {
   ctx.fillStyle = "#38bdf8";
   ctx.fillRect(-6, -6, 12, 5);
   ctx.restore();
+
+  // 4) Kum üstü dekor: havlular, deniz yıldızları, kabuklar, kum kalesi, ayak izleri
+  const cxy = (gx: number, gy: number) => {
+    const g = gridToScreen(gx, gy, l);
+    return { x: g.sx, y: g.sy + l.tileH / 2 };
+  };
+  const towels: [number, number, string, string][] = [
+    [2, 7, "#f43f5e", "#fecdd3"],
+    [6, 7, "#0ea5e9", "#e0f2fe"],
+    [2, 10, "#a855f7", "#f3e8ff"],
+    [6, 10, "#f59e0b", "#fef3c7"],
+    [14, 12, "#10b981", "#d1fae5"],
+  ];
+  for (const [tx, ty, c1, c2] of towels) {
+    const g = gridToScreen(tx, ty, l);
+    tilePath(ctx, g.sx, g.sy, l, 12 * l.scale);
+    ctx.fillStyle = c1;
+    ctx.fill();
+    ctx.save();
+    tilePath(ctx, g.sx, g.sy, l, 12 * l.scale);
+    ctx.clip();
+    ctx.strokeStyle = c2;
+    ctx.lineWidth = 2.2 * l.scale;
+    for (let q = -3; q <= 3; q++) {
+      ctx.beginPath();
+      ctx.moveTo(g.sx + q * 5 * l.scale - 14 * l.scale, g.sy + l.tileH * 0.5 - 8 * l.scale);
+      ctx.lineTo(g.sx + q * 5 * l.scale + 14 * l.scale, g.sy + l.tileH * 0.5 + 8 * l.scale);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.lineWidth = 1;
+  }
+  const star = (gx: number, gy: number, col: string) => {
+    const { x, y } = cxy(gx, gy);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    for (let q = 0; q < 10; q++) {
+      const r = (q % 2 ? 2.2 : 5) * l.scale;
+      const a = -Math.PI / 2 + (q * Math.PI) / 5;
+      ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.5);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  star(9, 12, "#fb7185");
+  star(15, 4, "#fb923c");
+  star(1, 4, "#f472b6");
+  star(12, 8, "#f87171");
+  const shell = (gx: number, gy: number) => {
+    const { x, y } = cxy(gx, gy);
+    ctx.fillStyle = "#fde8d0";
+    ctx.beginPath();
+    ctx.ellipse(x, y, 3.4 * l.scale, 2 * l.scale, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#d4a574";
+    ctx.stroke();
+  };
+  shell(9.4, 11.2);
+  shell(5.5, 8);
+  shell(15, 8.6);
+  shell(2.2, 14);
+  // kum kalesi
+  {
+    const { x, y } = cxy(12.2, 14.6);
+    ctx.fillStyle = "#e4c78a";
+    ctx.beginPath();
+    ctx.ellipse(x, y + 2 * l.scale, 10 * l.scale, 4.5 * l.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x - 7 * l.scale, y - 6 * l.scale, 14 * l.scale, 8 * l.scale);
+    for (let q = 0; q < 3; q++) ctx.fillRect(x - 7 * l.scale + q * 5 * l.scale, y - 9 * l.scale, 3.5 * l.scale, 3.5 * l.scale);
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.moveTo(x, y - 10 * l.scale);
+    ctx.lineTo(x, y - 18 * l.scale);
+    ctx.lineTo(x + 7 * l.scale, y - 15 * l.scale);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // ayak izleri (kıyıya doğru)
+  ctx.fillStyle = "rgba(160, 120, 60, 0.28)";
+  for (let q = 0; q < 8; q++) {
+    const { x, y } = cxy(10 + q * 0.7, 11.2 + q * 0.12 + (q % 2) * 0.22);
+    ctx.beginPath();
+    ctx.ellipse(x, y, 2.4 * l.scale, 1.2 * l.scale, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 5) Denizde şamandıralar, yelkenli ve iskele fenerleri
+  for (const [bx, by] of [[18.4, 1.5], [19.4, 3.2], [18.6, 11.5], [19.3, 13.8]] as const) {
+    const { x, y } = cxy(bx, by);
+    const bb = Math.sin(time / 520 + bx * 3 + by) * 2.2 * l.scale;
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.ellipse(x, y + bb, 5 * l.scale, 6 * l.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(x - 5 * l.scale, y + bb - 1.5 * l.scale, 10 * l.scale, 3 * l.scale);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + bb + 6 * l.scale, 7 * l.scale, 2 * l.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  {
+    // yelkenli, ufukta yavaşça süzülür
+    const t = (time / 22000) % 1;
+    const { x, y } = cxy(18.6, 0.5 + t * 14);
+    const bb = Math.sin(time / 600) * 2 * l.scale;
+    ctx.save();
+    ctx.translate(x, y + bb);
+    ctx.scale(l.scale, l.scale);
+    ctx.fillStyle = "#7c2d12";
+    ctx.beginPath();
+    ctx.moveTo(-14, 0);
+    ctx.lineTo(14, 0);
+    ctx.lineTo(9, 6);
+    ctx.lineTo(-10, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath();
+    ctx.moveTo(0, -2);
+    ctx.lineTo(0, -30);
+    ctx.lineTo(13, -3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#fda4af";
+    ctx.beginPath();
+    ctx.moveTo(-2, -2);
+    ctx.lineTo(-2, -22);
+    ctx.lineTo(-12, -3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  for (const py of [5, 8]) {
+    for (const px of [17, 18]) {
+      const { x, y } = cxy(px, py);
+      const g = 0.75 + Math.sin(time / 400 + px + py) * 0.25;
+      ctx.fillStyle = "#4a2f17";
+      ctx.fillRect(x - 1.5 * l.scale, y - 18 * l.scale, 3 * l.scale, 20 * l.scale);
+      ctx.fillStyle = `rgba(253, 224, 71, ${g})`;
+      ctx.shadowColor = "#fde047";
+      ctx.shadowBlur = 10 * l.scale;
+      ctx.beginPath();
+      ctx.arc(x, y - 20 * l.scale, 3.6 * l.scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // 6) Martılar: gökyüzünde daire çizerek uçar
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 1.8 * l.scale;
+  for (let q = 0; q < 3; q++) {
+    const a = time / (2600 + q * 700) + q * 2.1;
+    const c = cxy(13 + q * 1.5, 7 + q * 2);
+    const x = c.x + Math.cos(a) * (120 + q * 30) * l.scale;
+    const y = c.y - 150 * l.scale + Math.sin(a * 1.3) * 26 * l.scale;
+    const flap = Math.sin(time / 130 + q) * 3.5 * l.scale;
+    ctx.beginPath();
+    ctx.moveTo(x - 8 * l.scale, y - flap);
+    ctx.quadraticCurveTo(x - 3 * l.scale, y - 4 * l.scale - flap, x, y);
+    ctx.quadraticCurveTo(x + 3 * l.scale, y - 4 * l.scale - flap, x + 8 * l.scale, y - flap);
+    ctx.stroke();
+  }
+  ctx.lineWidth = 1;
 }
 
 /* ------------------------------------------------------------------ */

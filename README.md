@@ -263,3 +263,8 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Cadde/Mekan hızlı geçiş butonları ve arkadaş "git" kısayolu yalnızca admin'e açık (sadece arayüz kısıtı; sunucu tarafı portal denetimi yok).
 - Yükleme perdesi (`components/RoomLoader.tsx`): oyuna girişte ~3,4 sn, oda değişiminde ~2,2 sn; ilerleme çubuğu, oda adı, rastgele ipucu. Süreler dosyanın başındaki `total` değerinden ayarlanır.
 - Cadde trafiği tek yönlü (+x): ters yön için arka görünüm sprite'ı yok (v19 ek 8).
+
+### v19 ek 9 — Sahil Kasabası yenilendi (layout_v 11)
+- Yeni yerleşim: Sörf standı, balıkçı kulübesi (iskele yanında), yemek aracı, dondurma büfesi, çiçeklikler, ek şezlonglar, banklar, fenerler. Voleybol sahası ve DJ pisti korundu.
+- Koddan çizilen dekor: havlular, deniz yıldızları, kabuklar, kum kalesi, ayak izleri, şamandıralar, süzülen yelkenli, iskele fenerleri, uçan martılar.
+- Oda boyutu ve su kuralı aynı (20x16). `supabase/schema.sql` yeniden çalıştırılmalı: odanın eşyaları sıfırlanır.
