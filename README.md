@@ -227,3 +227,7 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - **Katmanlı karakter:** `public/sprites/avatar/` (legs, body, shirt, face, hs_* ve hs_*_b). 5 kareli sheet, kare 160x240. Soldaki panelde "🎨 Karakter" ile açılır; seçim diğer oyunculara presence ile yansır. Parçaları `python3 tools/gen_avatar_layers.py` üretir; kendi PNG'lerinle aynı adla değiştirebilirsin.
 - Şapka/gözlük/sırt/üst kıyafetler katmanlı modda mevcut vektör çizimle üstüne biner.
 - schema.sql'i yeniden çalıştır ve deploy et.
+
+### v19 ek 2: Cadde 1 yeniden düzenlendi (layout_v 15)
+- Kafe terası (4 masa takımı), gazete büfeleri, yol kenarı bankları, meydanda çeşme etrafı 8 bank, batı/doğu parklarda kamp ateşi + kütük oturaklar + piknik masaları, doğu kafe, ek arabalar. 116 eşya, kapılar ve NPC kareleri boş.
+- **Dikkat:** layout_v arttığı için schema.sql çalışınca Cadde 1'deki elle yapılan düzenlemeler sıfırlanır.
