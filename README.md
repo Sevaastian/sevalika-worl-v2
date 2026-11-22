@@ -262,3 +262,4 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Giriş ekranı yeniden tasarlandı (marka alanı, özellikler, ikonlu alanlar, şifre göster/gizle).
 - Cadde/Mekan hızlı geçiş butonları ve arkadaş "git" kısayolu yalnızca admin'e açık (sadece arayüz kısıtı; sunucu tarafı portal denetimi yok).
 - Yükleme perdesi (`components/RoomLoader.tsx`): oyuna girişte ~3,4 sn, oda değişiminde ~2,2 sn; ilerleme çubuğu, oda adı, rastgele ipucu. Süreler dosyanın başındaki `total` değerinden ayarlanır.
+- Cadde trafiği tek yönlü (+x): ters yön için arka görünüm sprite'ı yok (v19 ek 8).

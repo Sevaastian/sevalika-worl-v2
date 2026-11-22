@@ -397,7 +397,7 @@ export class GameEngine {
     // Cadde trafiği
     if (this.room.slug === "cadde-1") {
       if (this.traffic.length === 0) {
-        this.traffic.push({ type: "car_blue", lane: 7, x: 3, dir: 1, v: 1.7 }, { type: "car_yellow", lane: 8, x: 28, dir: -1, v: 1.5 });
+        this.traffic.push({ type: "car_blue", lane: 7, x: 3, dir: 1, v: 1.7 }, { type: "car_yellow", lane: 8, x: 14, dir: 1, v: 1.5 }, { type: "car_red", lane: 7, x: 26, dir: 1, v: 1.3 });
       }
       for (const c of this.traffic) {
         let sp = c.v;
@@ -720,6 +720,7 @@ export class GameEngine {
           const footY = sy + l.tileH * 0.75;
           ctx.save();
           ctx.translate(sx, 0);
+          // Sprite'ler yalnızca +x yönüne (sağ-aşağı) bakıyor; ters yön için arka görünüm çizimi yok.
           if (c.dir === -1) ctx.scale(-1, 1);
           ctx.drawImage(img, -w / 2, footY - h + (meta.offsetY ?? 6) * l.scale, w, h);
           ctx.restore();
