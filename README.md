@@ -235,3 +235,6 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 ### v19 ek 3: Sevaastian/Vistekiis eşyaları + Şans Çarkı
 - Admin özel karakterleri (Sevaastian, Vistekiis) artık şapka, gözlük, üst kıyafet ve sırt eşyalarını gösterir; ten rengi uygulanır. İmza siyah kıyafet/saç korunur.
 - 🎡 **Günlük Şans Çarkı:** üst çubukta "Çark". 24 saatte bir, ağırlıklı sunucu çekilişi (20–1000 Sanil). RPC: `wheel_status()`, `spin_wheel()`; `profiles.last_spin`.
+
+### v19 ek 4: Yuvarlak zemin gölgeleri kaldırıldı
+- Eşya/nesnelerin altındaki yuvarlak gölgeler (PNG sprite, vektör çizim ve kayalar) kapatıldı; nesneler havada durmuyor, zemine oturuyor. Geri açmak için `lib/draw.ts` içindeki `NO_SHADOW` sabitini yarı saydam siyaha çevir. Karakter gölgesi kaldı.

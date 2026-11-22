@@ -1241,6 +1241,9 @@ export function drawRug(ctx: Ctx, item: FurniItem, l: Layout) {
 /* Eşyalar & Mekan Dekorasyonu (PNG Sprite + Vektörel Yedek)           */
 /* ------------------------------------------------------------------ */
 
+/** Eşyaların zemine vuran yuvarlak gölgesi kapatıldı (havada duruyormuş hissi veriyordu) */
+const NO_SHADOW = "rgba(0,0,0,0)";
+
 export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const ox = item.ox ?? 0;
   const oy = item.oy ?? 0;
@@ -1290,7 +1293,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.imageSmoothingQuality = "high";
 
       // Yumuşak temas gölgesi (Ambient Occlusion)
-      ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(sx + ox, footY - 2 * l.scale, w * 0.34, h * 0.11, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1316,7 +1319,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
 
   switch (item.type) {
     case "beach_cafe": {
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 12, 95, 42, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1370,7 +1373,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
     }
     case "dj_booth": {
       const beat = Math.sin(time / 140) * 3;
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 8, 72, 30, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1436,7 +1439,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fillRect(item.rot === 0 ? -10 : 3, -20, 7, 18);
       break;
     case "bench":
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 2, 22, 9, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1453,7 +1456,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "lounger":
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 2, 24, 10, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1473,7 +1476,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "logseat":
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 18, 7, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1487,7 +1490,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "beanbag":
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 16, 8, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1497,7 +1500,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "campfire": {
-      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 4, 22, 10, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1537,7 +1540,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       break;
     }
     case "umbrella":
-      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 20, 8, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1558,7 +1561,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "surfboard":
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 12, 5, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1587,7 +1590,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fillRect(-16, -14, 32, 3);
       break;
     case "casinotable":
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 25, 12, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1625,7 +1628,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.shadowBlur = 0;
       break;
     case "streetlight":
-      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 2, 12, 5, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1661,7 +1664,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "tree":
-      ctx.fillStyle = "rgba(0,0,0,0.38)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 24, 10, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1683,7 +1686,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.fill();
       break;
     case "palm":
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillStyle = NO_SHADOW;
       ctx.beginPath();
       ctx.ellipse(0, 3, 20, 8, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -2561,7 +2564,7 @@ export function drawRock(ctx: Ctx, gx: number, gy: number, l: Layout) {
   ctx.translate(sx, sy + l.tileH / 2);
   const s = Math.max(0.75, l.scale);
   ctx.scale(s, s);
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fillStyle = NO_SHADOW;
   ctx.beginPath();
   ctx.ellipse(0, 2, 18, 7, 0, 0, Math.PI * 2);
   ctx.fill();
