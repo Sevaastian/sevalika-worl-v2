@@ -14,6 +14,17 @@ const MOODS: Record<string, Mood> = {
   "monako-kulup": { notes: [293.7, 349.2, 392, 440, 523.3, 587.3], tempoMs: 520, wave: "sawtooth" },
   iskele: { notes: [196, 246.9, 293.7, 329.6, 392, 493.9], tempoMs: 1500, wave: "sine" },
   restoran: { notes: [220, 277.2, 329.6, 440, 554.4, 659.3], tempoMs: 700, wave: "triangle" },
+  "tetris-arena": { notes: [329.6, 392, 466.2, 523.3, 587.3, 659.3], tempoMs: 300, wave: "square" },
+  "parti-oyunu": { notes: [329.6, 392, 440, 523.3, 659.3, 784], tempoMs: 420, wave: "square" },
+  "hain-avi": { notes: [110, 123.5, 130.8, 146.8, 164.8, 98], tempoMs: 1800, wave: "sawtooth" },
+  "sahil-kasabasi": { notes: [293.7, 329.6, 370, 440, 493.9, 587.3], tempoMs: 800, wave: "triangle" },
+  "kis-koyu": { notes: [329.6, 392, 493.9, 587.3, 659.3, 784], tempoMs: 1700, wave: "sine" },
+  avm: { notes: [261.6, 329.6, 392, 440, 523.3, 659.3], tempoMs: 750, wave: "triangle" },
+  "avm-kat2": { notes: [261.6, 329.6, 392, 440, 523.3, 659.3], tempoMs: 750, wave: "triangle" },
+  oyunika: { notes: [329.6, 392, 440, 523.3, 659.3, 784], tempoMs: 480, wave: "square" },
+  ciftlik: { notes: [196, 220, 261.6, 293.7, 392, 440], tempoMs: 1200, wave: "triangle" },
+  maden: { notes: [130.8, 146.8, 164.8, 196, 220, 261.6], tempoMs: 1600, wave: "sawtooth" },
+  "emlak-ofisi": { notes: [261.6, 293.7, 349.2, 392, 440, 523.3], tempoMs: 1000, wave: "sine" },
   home: { notes: [174.6, 196, 220, 261.6, 293.7, 349.2], tempoMs: 1100, wave: "sine" },
 };
 
@@ -24,6 +35,12 @@ export class AmbientMusic {
   private mood: Mood = MOODS["cadde-1"];
   private step = 0;
   running = false;
+  private vol = 0.6;
+
+  setVolume(v: number) {
+    this.vol = Math.min(1, Math.max(0, v));
+    if (this.master) this.master.gain.value = 0.85 * this.vol;
+  }
 
   private ensure() {
     if (this.ctx) return;
@@ -31,7 +48,7 @@ export class AmbientMusic {
     if (!Ctor) return;
     const ctx = new Ctor();
     const master = ctx.createGain();
-    master.gain.value = 0.5;
+    master.gain.value = 0.85 * this.vol;
     // Hafif yankı
     const delay = ctx.createDelay();
     delay.delayTime.value = 0.34;

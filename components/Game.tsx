@@ -9,6 +9,8 @@ import {
   BAG_ITEM_LABELS,
   MINE_COOLDOWN_MS,
   OYUNIKA_TRACK,
+  OYUNIKA_ROUTE,
+  PARTI_PODIUM,
   REPORT_POS_MS,
   type GoodsPrefix,
   COSMETIC_BY_ID,
@@ -33,6 +35,7 @@ import {
   isHomeSlug,
   resolveRoom,
   type CosmeticSlot,
+  DAILY_REWARDS,
 } from "@/lib/constants";
 import { GameEngine } from "@/lib/engine";
 import { inGrid } from "@/lib/iso";
@@ -73,6 +76,11 @@ import type {
 import AdminPanel from "./AdminPanel";
 import { ChatBar, ChatLog } from "./ChatUI";
 import { OyunikaHud, OyunikaLobbyModal } from "./OyunikaModal";
+import { useHainAvi } from "./useHainAvi";
+import { HainLobbyModal, HainHud, HainMeeting, HainRoleOverlay } from "./HainUi";
+import type { HainMsg } from "@/lib/hain";
+import type { TetMsg } from "@/lib/tetris";
+import TetrisArena from "./TetrisArena";
 import { AvatarPanel, BagPanel, BuildPanel, ChefNpcModal, FisherNpcModal, PlayerCard } from "./Panels";
 import RoleBadge from "./RoleBadge";
 import { BundleShopPanel, ExpandHomePanel, FriendsPanel, GuidePanel, QuizBanner, RealtorPanel, ShopPanel, WheelPanel } from "./SocialPanels";
@@ -82,6 +90,10 @@ import { sfx } from "@/lib/sfx";
 import TopBar, { type PanelKey } from "./TopBar";
 import { usePanelDock } from "./usePanelDock";
 import RoomLoader from "./RoomLoader";
+import { SettingsPanel } from "./SettingsPanel";
+import { DailyPanel } from "./DailyPanel";
+import { Tour, tourDone } from "./Tour";
+import { loadSettings, saveSettings, type Settings } from "@/lib/settings";
 
 const timeStr = () => {
   const d = new Date();
@@ -102,7 +114,7 @@ const cosmetic = (id: unknown, slot: CosmeticSlot): string | null =>
 
 const HELP_LINES = [
   "🌟 Sevalika World: arkadaşlarınla gezip sohbet ettiğin, odanı dekore ettiğin, balık tutup kazı yaptığın izometrik bir sosyal dünya. Yere tıklayıp yürü, parlayan kapı karelerinden odalara geç.",
-  "🎲 Oyunika: Cadde 1'deki Oyunika Mert'e tıklayıp en fazla 5 arkadaşınla lobiye katıl; kıvrımlı parkurda çift zar atarak yarış!",
+  "🎮 Oyunika: Cadde 1'deki Oyunika kapısından gir. Parti Lara ile kutu oyunu (Parti Oyunu), Komutan Demir ile Hain Avı oyna!",
   "💰 Para kazan: iskelede balık tut (Hasan'dan olta al), madende kazı yap (Recep'ten kazma), çiftlikte ekin yetiştir (Ayşe), Şef Kemal'e balık/ekin/yemek sat. Her gün 🎁 ödülünü al.",
   "📈 İlerle: 📜 Görevler günlük Sanil+XP verir; seviye atla, 14 başarım topla, 🏆 balık turnuvasına katıl.",
   "🍳 Aşçılık: restoranda Şef Kemal'e balık + çiftlik ürünü verip yemek pişir; ham maddeden çok daha pahalıya satılır.",
@@ -122,6 +134,8 @@ const INITIAL_OYUNIKA: OyunikaState = {
   lastDice: null,
   lastEventText: null,
   winner: null,
+  finishOrder: [],
+  turnEndsAt: 0,
 };
 
 export default function Game({ initialProfile, onLogout }: { initialProfile: Profile; onLogout: () => void }) {
@@ -251,6 +265,10 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
 
   const [wheelStatus, setWheelStatus] = useState<{ ready: boolean; seconds: number } | null>(null);
   const [layeredOn, setLayeredOn] = useState(() => getLayeredPref());
+  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [blocks, setBlocks] = useState<string[]>([]);
+  const [tourOpen, setTourOpen] = useState(() => !tourDone());
+  const blocksRef = useRef<Set<string>>(new Set());
   const toggleLayered = () => {
     const v = !layeredOn;
     setLayeredOn(v);
@@ -261,6 +279,28 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   };
 
   const trackPresence = useCallback(() => netRef.current?.track(buildPresence()), [buildPresence]);
+
+  /* ---------------- Ayarlar ve engelleme ---------------- */
+  const changeSettings = (s: Settings) => {
+    setSettings(s);
+    saveSettings(s);
+    sfx.volume = s.sfxVol;
+    music.setVolume(s.musicVol);
+  };
+
+  useEffect(() => {
+    const s = loadSettings();
+    saveSettings(s);
+    sfx.volume = s.sfxVol;
+    music.setVolume(s.musicVol);
+    void backend
+      .myBlocks()
+      .then((b) => {
+        blocksRef.current = new Set(b.map((x) => x.toLowerCase()));
+        setBlocks(b);
+      })
+      .catch(() => {});
+  }, [music]);
 
   /** Profil durumunu ref'e + state'e yazar ve motordaki karakterimi günceller. */
   const updateProfile = useCallback(
@@ -445,10 +485,20 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       setSelected(null);
       roomSlugRef.current = slug;
       setRoomSlug(slug);
+      sfx.play("door");
       sys(`${target.name} odasına girdin.`);
     },
     [notify, sys, stopFishing],
   );
+
+  /* ---------------- Hain Avı ---------------- */
+  const hain = useHainAvi({ engineRef, netRef, profileRef, myId, roomSlug, changeRoom, notify, sys });
+  const tetNetRef = useRef<((m: TetMsg) => void) | null>(null);
+  const tetActiveRef = useRef(false);
+  const hainRef = useRef(hain);
+  useEffect(() => {
+    hainRef.current = hain;
+  });
 
   /* ---------------- Oyunika Çok Oyunculu & Kutu Oyunu Mantığı ---------------- */
 
@@ -457,28 +507,45 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     setOyunika(next);
   }, []);
 
-  /** Bir oyuncunun parkur karesinden diğerine tek tek zıplayarak yürümesini sağlar */
-  const animateOyunikaWalk = useCallback((username: string, fromIdx: number, toIdx: number) => {
+  /** Bir oyuncunun parkur karesinden diğerine bağlantı yolundan yürümesini sağlar; bitirdiyse kürsüye çıkar */
+  const animateOyunikaWalk = useCallback((username: string, fromIdx: number, toIdx: number, place?: number) => {
     const engine = engineRef.current;
     if (!engine) return;
     const pl = engine.players.find((x) => x.name.toLowerCase() === username.toLowerCase());
     if (!pl) return;
     const steps: Tile[] = [];
-    if (toIdx > fromIdx) {
-      for (let i = fromIdx + 1; i <= toIdx; i++) {
-        const cell = OYUNIKA_TRACK[i];
-        if (cell) steps.push({ gx: cell.gx, gy: cell.gy });
-      }
-    } else if (toIdx < fromIdx) {
-      for (let i = fromIdx - 1; i >= toIdx; i--) {
-        const cell = OYUNIKA_TRACK[i];
-        if (cell) steps.push({ gx: cell.gx, gy: cell.gy });
-      }
+    const a = OYUNIKA_TRACK[fromIdx]?.route ?? 0;
+    const b = OYUNIKA_TRACK[toIdx]?.route ?? 0;
+    if (b > a) for (let i = a + 1; i <= b; i++) steps.push({ gx: OYUNIKA_ROUTE[i].gx, gy: OYUNIKA_ROUTE[i].gy });
+    else if (b < a) for (let i = a - 1; i >= b; i--) steps.push({ gx: OYUNIKA_ROUTE[i].gx, gy: OYUNIKA_ROUTE[i].gy });
+    if (place && PARTI_PODIUM[place - 1]) {
+      const pod = PARTI_PODIUM[place - 1];
+      const last = OYUNIKA_ROUTE[OYUNIKA_ROUTE.length - 1];
+      for (let y = last.gy + 1; y <= pod.gy + 1; y++) steps.push({ gx: last.gx, gy: y });
+      for (let x = last.gx + 1; x <= pod.gx; x++) steps.push({ gx: x, gy: pod.gy + 1 });
+      steps.push({ gx: pod.gx, gy: pod.gy });
     }
     if (steps.length > 0) {
       pl.path = steps;
+      pl.speedMul = 2;
       pl.isSitting = false;
       pl.isDancing = false;
+    }
+  }, []);
+
+  /** Yeni tur: herkes başlangıç karesine yürür */
+  const gatherToStart = useCallback((names: string[]) => {
+    const engine = engineRef.current;
+    if (!engine || roomSlugRef.current !== "parti-oyunu") return;
+    const st = OYUNIKA_TRACK[0];
+    for (const n of names) {
+      const pl = engine.players.find((x) => !x.isNpc && x.name.toLowerCase() === n.toLowerCase());
+      if (!pl) continue;
+      const path = engine.computePath({ gx: Math.round(pl.gx), gy: Math.round(pl.gy) }, { gx: st.gx, gy: st.gy });
+      if (path && path.length) {
+        pl.path = path;
+        pl.speedMul = 2;
+      }
     }
   }, []);
 
@@ -512,6 +579,8 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       lastDice: null,
       lastEventText: null,
       winner: null,
+      finishOrder: [],
+      turnEndsAt: 0,
     };
     sfx.play("click");
     broadcastOyunika(next);
@@ -537,7 +606,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     const p = profileRef.current;
     const list =
       cur.players.length > 0
-        ? cur.players.map((x) => ({ ...x, pos: 0, skipTurn: false }))
+        ? cur.players.map((x) => ({ ...x, pos: 0, skipTurn: false, finished: false }))
         : [{ username: p.username, pos: 0, skipTurn: false, shirtColor: p.shirtColor, hairColor: p.hairColor, skinColor: p.skinColor }];
 
     const next: OyunikaState = {
@@ -548,25 +617,34 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       lastDice: null,
       lastEventText: "🎲 Oyun başladı! İlk zar bekleniyor...",
       winner: null,
+      finishOrder: [],
+      turnEndsAt: Date.now() + 10000 + 3000,
     };
     sfx.play("win");
     broadcastOyunika(next);
     setActiveNpc(null);
-    await changeRoom("oyunika");
+    if (roomSlugRef.current === "parti-oyunu") gatherToStart(list.map((x) => x.username));
+    await changeRoom("parti-oyunu");
   };
 
-  const oyunikaRollDice = () => {
-    const cur = oyunikaRef.current;
-    const p = profileRef.current;
-    if (cur.status !== "playing" || oyunikaRolling) return;
-    const actor = cur.players[cur.turnIndex];
-    if (!actor || actor.username.toLowerCase() !== p.username.toLowerCase()) return;
+  const rollingRef = useRef(false);
+  const oyunikaRollFor = (forced: boolean) => {
+    const start = oyunikaRef.current;
+    if (start.status !== "playing" || rollingRef.current) return;
+    const actor0 = start.players[start.turnIndex];
+    if (!actor0 || actor0.finished) return;
+    if (!forced && actor0.username.toLowerCase() !== profileRef.current.username.toLowerCase()) return;
 
+    rollingRef.current = true;
     setOyunikaRolling(true);
     sfx.play("click");
 
     setTimeout(() => {
+      rollingRef.current = false;
       setOyunikaRolling(false);
+      const cur = oyunikaRef.current;
+      const actor = cur.players[cur.turnIndex];
+      if (cur.status !== "playing" || !actor || actor.username !== actor0.username || actor.finished) return;
       const d1 = 1 + Math.floor(Math.random() * 6);
       const d2 = 1 + Math.floor(Math.random() * 6);
       const sum = d1 + d2;
@@ -581,7 +659,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       let setSkip = false;
 
       if (targetPos >= maxIdx) {
-        eventText = `🏆 ${actor.username} bitiş karesine ulaştı ve oyunu kazandı!`;
+        eventText = `🏁 ${actor.username} bitiş çizgisini geçti!`;
       } else if (landedCell.kind === "red") {
         setSkip = true;
         eventText = `🟥 ${actor.username} kırmızı tuzağa bastı! Gelecek 1 tur bekleyecek.`;
@@ -590,42 +668,64 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         extraTurn = true;
         eventText = `🟩 ${actor.username} yeşil şans karesine bastı! Ekstra 1 zar hakkı kazandı!`;
         sfx.play("win");
+      } else if (landedCell.kind === "blue") {
+        targetPos = Math.min(maxIdx - 1, targetPos + 5);
+        eventText = `⚡ Hız Kuşağı! ${actor.username} 5 kare ileri fırladı (${targetPos}. kare)!`;
+        sfx.play("win");
+      } else if (landedCell.kind === "orange") {
+        targetPos = Math.max(0, targetPos - 6);
+        eventText = `⏪ Geri Sar! ${actor.username} 6 kare geri gönderildi (${targetPos}. kare)!`;
+        sfx.play("error");
       } else if (landedCell.kind === "purple") {
         const forward = Math.random() < 0.55;
-        const delta = (2 + Math.floor(Math.random() * 3)) * (forward ? 1 : -1); // +2..+4 veya -2..-4
-        targetPos = Math.max(0, Math.min(maxIdx, targetPos + delta));
+        const delta = (2 + Math.floor(Math.random() * 3)) * (forward ? 1 : -1);
+        targetPos = Math.max(0, Math.min(maxIdx - 1, targetPos + delta));
         eventText = forward
           ? `🟪 Mor Sürpriz! ${actor.username} +${delta} adım ileri fırladı (${targetPos}. kare)!`
           : `🟪 Mor Sürpriz! ${actor.username} ${Math.abs(delta)} adım geri gönderildi (${targetPos}. kare)!`;
         sfx.play(forward ? "win" : "error");
       }
 
+      const justFinished = targetPos >= maxIdx;
+      const finishOrder = justFinished ? [...cur.finishOrder, actor.username] : cur.finishOrder;
+      const place = justFinished ? finishOrder.length : undefined;
       const players = cur.players.map((pl, i) =>
-        i === cur.turnIndex ? { ...pl, pos: targetPos, skipTurn: setSkip } : pl,
+        i === cur.turnIndex ? { ...pl, pos: targetPos, skipTurn: setSkip, finished: justFinished || pl.finished } : pl,
       );
-
-      // Bitişe ulaşıldıysa oyunu bitir
-      if (targetPos >= maxIdx) {
+      if (justFinished) {
+        eventText = `${["🥇", "🥈", "🥉", "🏅"][Math.min(3, (place ?? 1) - 1)]} ${actor.username} ${place}. oldu ve kürsüye çıkıyor!`;
         sfx.play("win");
+      }
+
+      const walkTiles =
+        Math.abs((OYUNIKA_TRACK[targetPos]?.route ?? 0) - (OYUNIKA_TRACK[startPos]?.route ?? 0)) + (place ? 8 : 0);
+      const walkMs = Math.round((walkTiles / (3.4 * 2)) * 1000) + 600;
+      const move = { username: actor.username, from: startPos, to: targetPos, place };
+
+      // Oyun bitişi: ilk 3 oyuncu (veya hepsi) bitirince
+      if (finishOrder.length >= Math.min(3, players.length)) {
         const fin: OyunikaState = {
           ...cur,
           status: "finished",
           players,
           lastDice: [d1, d2],
           lastEventText: eventText,
-          winner: actor.username,
+          winner: finishOrder[0] ?? null,
+          finishOrder,
+          turnEndsAt: 0,
         };
-        animateOyunikaWalk(actor.username, startPos, targetPos);
-        broadcastOyunika(fin, { username: actor.username, from: startPos, to: targetPos });
+        animateOyunikaWalk(actor.username, startPos, targetPos, place);
+        broadcastOyunika(fin, move);
         sys(eventText);
         return;
       }
 
-      // Sıradaki oyuncuyu belirle (kırmızı cezası olan 1 tur atlanır ve cezası silinir)
-      let nextTurn = cur.turnIndex;
-      if (!extraTurn) {
+      // Sıradaki oyuncu: bitirenler atlanır, kırmızı cezası olan 1 tur bekler
+      let nextTurn = extraTurn && !justFinished ? cur.turnIndex : -1;
+      if (nextTurn < 0) {
         for (let step = 1; step <= players.length; step++) {
           const cand = (cur.turnIndex + step) % players.length;
+          if (players[cand].finished) continue;
           if (players[cand].skipTurn) {
             players[cand] = { ...players[cand], skipTurn: false };
             eventText += ` (${players[cand].username} kırmızı cezası nedeniyle bu tur bekledi)`;
@@ -634,6 +734,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
             break;
           }
         }
+        if (nextTurn < 0) nextTurn = Math.max(0, players.findIndex((x) => !x.finished));
       }
 
       const next: OyunikaState = {
@@ -642,12 +743,34 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         turnIndex: nextTurn,
         lastDice: [d1, d2],
         lastEventText: eventText,
+        finishOrder,
+        turnEndsAt: Date.now() + walkMs + 10000,
       };
-      animateOyunikaWalk(actor.username, startPos, targetPos);
-      broadcastOyunika(next, { username: actor.username, from: startPos, to: targetPos });
+      animateOyunikaWalk(actor.username, startPos, targetPos, place);
+      broadcastOyunika(next, move);
       sys(eventText);
     }, 450);
   };
+  const oyunikaRollDice = () => oyunikaRollFor(false);
+
+  // 10 sn dolunca sıra sahibi için otomatik zar (kendi sıramsa ben, oyuncu yoksa kurucu 3,5 sn sonra)
+  const rollRef = useRef(oyunikaRollFor);
+  useEffect(() => {
+    rollRef.current = oyunikaRollFor;
+  });
+  useEffect(() => {
+    const t = setInterval(() => {
+      const st = oyunikaRef.current;
+      if (roomSlugRef.current !== "parti-oyunu" || st.status !== "playing" || !st.turnEndsAt) return;
+      const now = Date.now();
+      const actor = st.players[st.turnIndex];
+      if (!actor || now < st.turnEndsAt) return;
+      const me = profileRef.current.username.toLowerCase();
+      if (actor.username.toLowerCase() === me) rollRef.current(false);
+      else if (st.host?.toLowerCase() === me && now >= st.turnEndsAt + 3500) rollRef.current(true);
+    }, 300);
+    return () => clearInterval(t);
+  }, []);
 
   /* ---------------- Motor ---------------- */
 
@@ -752,7 +875,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
 
     // Demo modunda odayı canlı göstermek için gezinen bir bot (Oyunika parkuru hariç)
     let wander: ReturnType<typeof setInterval> | undefined;
-    if (!backend.online && roomSlug !== "oyunika") {
+    if (!backend.online && roomSlug !== "parti-oyunu" && roomSlug !== "hain-avi") {
       const bot = mk({
         id: "bot_cemre",
         name: "Cemre",
@@ -815,6 +938,8 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       p.id,
       (row: ChatRow) => {
         if (row.kind !== "chat" || row.sender_id === profileRef.current.id) return;
+        if (blocksRef.current.has(String(row.sender).toLowerCase())) return;
+        if (roomSlugRef.current === "hain-avi" && hainRef.current.iAmIn && hainRef.current.state.status === "playing") return;
         const body = String(row.text ?? "").slice(0, MAX_CHAT_LENGTH);
         if (!body) return;
         sfx.play("pop");
@@ -823,6 +948,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       },
       (row: ChatRow) => {
         if (row.kind !== "whisper" || row.sender_id === profileRef.current.id) return;
+        if (blocksRef.current.has(String(row.sender).toLowerCase())) return;
         const body = String(row.text ?? "").slice(0, MAX_CHAT_LENGTH);
         if (!body) return;
         addChat({ sender: row.sender, text: body, role: roleOf(row.sender_id, row.sender), isWhisper: true, whisperTarget: profileRef.current.username });
@@ -904,6 +1030,16 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
 
       onAction: (a) => {
         if (a.id === myId) return;
+        const hm = (a as { hain?: HainMsg }).hain;
+        if (hm) {
+          hainRef.current.onNet(hm);
+          return;
+        }
+        const tm = (a as { tet?: TetMsg }).tet;
+        if (tm) {
+          tetNetRef.current?.(tm);
+          return;
+        }
         // Oyunika çok oyunculu senkronizasyonu
         const oy = (a as { oyunikaState?: OyunikaState }).oyunikaState;
         if (oy && typeof oy.status === "string") {
@@ -912,17 +1048,18 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
             (x) => x.username.toLowerCase() === profileRef.current.username.toLowerCase(),
           );
           setOyunikaBoth(oy);
-          const mv = (a as { oyunikaMove?: { username: string; from: number; to: number } | null }).oyunikaMove;
-          if (mv) animateOyunikaWalk(mv.username, mv.from, mv.to);
+          if (prevStatus !== "playing" && oy.status === "playing") gatherToStart(oy.players.map((x) => x.username));
+          const mv = (a as { oyunikaMove?: { username: string; from: number; to: number; place?: number } | null }).oyunikaMove;
+          if (mv) animateOyunikaWalk(mv.username, mv.from, mv.to, mv.place);
           // Lobi kurucusu oyunu başlattıysa lobideki diğer oyuncuları da Oyunika odasına geçir
           if (
             prevStatus === "lobby" &&
             wasInLobby &&
             oy.status === "playing" &&
             oy.players.some((x) => x.username.toLowerCase() === profileRef.current.username.toLowerCase()) &&
-            roomSlugRef.current !== "oyunika"
+            roomSlugRef.current !== "parti-oyunu"
           ) {
-            void changeRoom("oyunika");
+            void changeRoom("parti-oyunu");
           }
           return;
         }
@@ -955,7 +1092,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       net.leave();
       if (netRef.current === net) netRef.current = null;
     };
-  }, [roomSlug, myId, music, buildPresence, resolveProfiles, notify, addChat, animateOyunikaWalk, setOyunikaBoth, changeRoom]);
+  }, [roomSlug, myId, music, buildPresence, resolveProfiles, notify, addChat, animateOyunikaWalk, gatherToStart, setOyunikaBoth, changeRoom]);
 
   /* ---------------- Kalp atışı: uzaklaştırma / susturma kontrolü ---------------- */
 
@@ -1015,6 +1152,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       const from = String(ev.payload.from ?? "");
       switch (ev.kind) {
         case "friend_request":
+          sfx.play("notify");
           notify(`👥 ${from} sana arkadaşlık isteği gönderdi.`, 4000);
           sys(`${from} sana arkadaşlık isteği gönderdi (Arkadaşlar paneli).`);
           void refreshFriends();
@@ -1353,6 +1491,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     if (buildMode && buildTool === "nudge") return;
     const tile = engine.tileAtClient(e.clientX, e.clientY);
     if (!tile) return;
+    if (hainRef.current.locked || tetActiveRef.current) return;
     const slug = roomSlugRef.current;
 
     if (buildMode) {
@@ -1573,11 +1712,12 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   };
 
   const claimDaily = async () => {
+    const day = profileRef.current.streakNext ?? 1;
     const coins = await act(() => backend.claimDaily());
     if (coins === undefined) return;
-    updateProfile({ coins, canClaimDaily: false });
+    updateProfile({ coins, canClaimDaily: false, dailyStreak: day, streakNext: (day % 7) + 1 });
     sfx.play("coin");
-    sys("Günlük ödülün olan +500 Sanil hesabına eklendi!");
+    sys(`Günlük ödül (Gün ${day}/7): +${DAILY_REWARDS[day - 1]} Sanil hesabına eklendi!${day === 7 ? " 🏆 Seri tamamlandı!" : ""}`);
   };
 
   const goHome = () =>
@@ -2142,6 +2282,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       return notify("Bilinmeyen komut. /yardim yaz.");
     } else {
       if (isBlocked(p.mutedUntil)) return notify("🔇 Susturuldun, şu an yazamazsın.");
+      if (slug === "hain-avi" && hain.state.status === "playing" && hain.iAmIn) return notify("🤫 Oyun sırasında sohbet kapalı. Toplantıda yazabilirsin.");
       const ok = await act(async () => {
         await backend.sendChat(slug, raw);
         return true;
@@ -2152,6 +2293,24 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     }
     setChatInput("");
   };
+
+  const blockPlayer = (name: string) =>
+    void act(async () => {
+      await backend.blockUser(name);
+      blocksRef.current.add(name.toLowerCase());
+      setBlocks((b) => (b.includes(name) ? b : [...b, name]));
+      setSelected(null);
+      void refreshFriends();
+      notify(`🚫 ${name} engellendi.`);
+    });
+
+  const unblockPlayer = (name: string) =>
+    void act(async () => {
+      await backend.unblockUser(name);
+      blocksRef.current.delete(name.toLowerCase());
+      setBlocks((b) => b.filter((x) => x !== name));
+      notify(`${name} engeli kaldırıldı.`);
+    });
 
   const logout = async () => {
     await backend.signOut();
@@ -2183,6 +2342,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         onGoHome={goHome}
         onClaimDaily={claimDaily}
         onTogglePanel={(k) => {
+          sfx.play("open");
           if (k === "friends") void refreshFriends();
           if (k === "quests") void loadQuests();
           if (k === "wheel") void backend.wheelStatus().then(setWheelStatus).catch(() => {});
@@ -2255,6 +2415,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
         </div>
 
+        {tourOpen && <Tour onClose={() => setTourOpen(false)} />}
         <RoomLoader key={roomSlug} name={resolveRoom(roomSlug)?.name ?? "Oda"} />
         {quiz && <QuizBanner quiz={quiz} onAnswer={answerQuiz} onExpire={() => setQuiz(null)} />}
 
@@ -2312,6 +2473,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onProfile={() => showProfileCard(selected.name)}
               onTag={hide?.active && hide.me_seeker && hide.room === roomSlug ? () => tagPlayer(selected.name) : undefined}
               onReport={(reason) => reportPlayer(selected.name, reason)}
+              onBlock={() => blockPlayer(selected.name)}
               onGift={(n) => adminGift(selected.name, n)}
               onRole={(r) => adminGrantRole(selected.name, r)}
               onKick={() => adminKick(selected.name)}
@@ -2322,17 +2484,67 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         </div>
 
         <div ref={dockR} className="sw-dock absolute top-2.5 right-2.5 z-20 flex flex-col gap-2 items-end pointer-events-none">
-          {roomSlug === "oyunika" && (
+          {roomSlug === "parti-oyunu" && (
             <OyunikaHud
               state={oyunika}
               myUsername={profile.username}
               rolling={oyunikaRolling}
               onRoll={oyunikaRollDice}
               onReset={() => void oyunikaStart()}
-              onLeaveRoom={() => void changeRoom("cadde-1")}
+              onLeaveRoom={() => void changeRoom("oyunika")}
             />
           )}
-          {activeNpc === "oyunika" && (
+          {roomSlug === "hain-avi" && (
+            <>
+              <HainHud h={hain} />
+              <HainRoleOverlay h={hain} />
+              <HainMeeting h={hain} me={profile.username} />
+            </>
+          )}
+          {activeNpc === "demir" && (
+            <HainLobbyModal h={hain} me={profile.username} isAdmin={profile.role === "admin"} onClose={() => setActiveNpc(null)} />
+          )}
+          {activeNpc === "ali" && (
+            <div className="fixed inset-0 z-30 bg-slate-950/60 flex items-center justify-center p-4" onClick={() => setActiveNpc(null)}>
+              <div className="bg-slate-900 border-2 border-violet-500 rounded-2xl p-4 w-80 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="text-sm font-black text-violet-300">🕹️ Oyuncu Ali · Blok Rüzgârı</div>
+                <p className="text-xs text-slate-300">
+                  Klasik blok düşürme oyunu! Tek başına skor kovala ya da arkadaşlarınla düello yap. Tek kişilikte 1.000 puana 25 Sanil, düello galibine 200 Sanil.
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveNpc(null);
+                    void changeRoom("tetris-arena");
+                  }}
+                  className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-black py-2.5 rounded-xl"
+                >
+                  🧱 Arenaya Gir
+                </button>
+                <button onClick={() => setActiveNpc(null)} className="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2 rounded-xl">
+                  Kapat
+                </button>
+              </div>
+            </div>
+          )}
+          {roomSlug === "tetris-arena" && (
+            <TetrisArena
+              me={profile.username}
+              send={(m) => netRef.current?.send("action", { id: myId, tet: m })}
+              netHandlerRef={tetNetRef}
+              submit={async (mode, score, lines, secs) => {
+                const r = await backend.tetrisSubmit(mode, score, lines, secs);
+                await refreshProfile();
+                return r;
+              }}
+              fetchBoard={() => backend.tetrisBoard()}
+              onLeave={() => void changeRoom("oyunika")}
+              onActive={(a) => {
+                tetActiveRef.current = a;
+              }}
+              notify={notify}
+            />
+          )}
+          {activeNpc === "lara" && (
             <OyunikaLobbyModal
               state={oyunika}
               myUsername={profile.username}
@@ -2411,6 +2623,35 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onLeave={() => guildAct(() => backend.guildLeave(), "Loncadan ayrıldın.")}
               onKick={(u) => guildAct(() => backend.guildKick(u), `${u} loncadan çıkarıldı.`)}
               onDonate={(n) => guildAct(() => backend.guildDonate(n).then((r) => updateProfile({ coins: r.coins })), "🛡️ Bağış yapıldı!")}
+            />
+          )}
+          {panel === "daily" && (
+            <DailyPanel
+              streak={profile.dailyStreak ?? 0}
+              next={profile.streakNext ?? 1}
+              canClaim={profile.canClaimDaily}
+              onClaim={() => void claimDaily()}
+              onClose={() => setPanel(null)}
+            />
+          )}
+          {panel === "settings" && (
+            <SettingsPanel
+              settings={settings}
+              sfxOn={sfxOn}
+              musicOn={musicOn}
+              layered={layeredOn}
+              blocks={blocks}
+              onChange={changeSettings}
+              onToggleSfx={toggleSfx}
+              onToggleMusic={toggleMusic}
+              onToggleLayered={toggleLayered}
+              onUnblock={unblockPlayer}
+              onLogout={logout}
+              onTour={() => {
+                setPanel(null);
+                setTourOpen(true);
+              }}
+              onClose={() => setPanel(null)}
             />
           )}
           {panel === "bag" && <BagPanel inventory={profile.inventory} riding={riding} tool={profile.tool} onClose={() => setPanel(null)} onUse={useBagItem} />}

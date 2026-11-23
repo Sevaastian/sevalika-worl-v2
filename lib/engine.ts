@@ -1,7 +1,8 @@
-import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile } from "./constants";
-import { drawAvatar, drawBubble, drawFlag, drawFurni, drawPet, drawRock, drawRoom, drawRug, roomRocks } from "./draw";
+import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile, PARTI_PODIUM } from "./constants";
+import { drawAvatar, drawBubble, drawFlag, drawFurni, drawHainBody, drawHainMark, drawHainWall, drawPet, drawPodiumBlock, podiumLift, drawRock, drawRoom, drawRug, roomRocks, roomWalls } from "./draw";
 import { getLayout, gridToScreen, inGrid, screenToGrid, type Layout } from "./iso";
 import { lighting, updateLighting } from "./ambience";
+import { gfx } from "./settings";
 import { findPath } from "./pathfinding";
 import { FURNI_SPRITES, sprites } from "./sprites";
 import type { ChatBubble, Emote, FurniItem, Player, RoomDef, Tile, WeatherMode } from "./types";
@@ -23,6 +24,12 @@ export class GameEngine {
   nightEnabled = true;
   weather: WeatherMode = "auto";
   flag: Tile | null = null;
+  /** Hain Avı: ceset ve görev işaretleri (bu istemciye özel) */
+  /** Hain Avı: görüş yarıçapı (kare); null = sınırsız */
+  vision: number | null = null;
+  private wallCache: { slug: string; set: Set<number> } | null = null;
+  bodies: { gx: number; gy: number; color: string; name: string }[] = [];
+  marks: { gx: number; gy: number; icon: string; done: boolean }[] = [];
   private pets = new Map<string, { gx: number; gy: number; moving: boolean }>();
   private flakes: { x: number; y: number; v: number; r: number }[] = [];
   /** Mevsim parçacıkları (sonbahar yaprağı, bahar yaprağı/çiçek) */
@@ -138,6 +145,7 @@ export class GameEngine {
     }
     for (const pl of this.players) if (pl.isNpc) set.add(Math.round(pl.gy) * cols + Math.round(pl.gx));
     for (const [rx, ry] of roomRocks(this.room.slug)) set.add(ry * cols + rx);
+    for (const [wx, wy] of roomWalls(this.room.slug)) set.add(wy * cols + wx);
     for (let gx = 0; gx < cols; gx++) {
       for (let gy = 0; gy < rows; gy++) {
         if (isWaterTile(this.room.slug, gx, gy)) set.add(gy * cols + gx);
@@ -272,7 +280,8 @@ export class GameEngine {
   private update(dt: number) {
     for (const p of this.players) {
       const riding = p.isRidingHorse;
-      let step = (riding ? HORSE_SPEED : WALK_SPEED) * dt;
+      let step = (riding ? HORSE_SPEED : WALK_SPEED) * (p.speedMul ?? 1) * dt;
+      if (p.path.length === 0 && p.speedMul) p.speedMul = undefined;
 
       while (step > 0 && p.path.length > 0) {
         p.isSitting = false;
@@ -350,7 +359,7 @@ export class GameEngine {
 
   private isOutdoor(): boolean {
     const slug = this.room.slug;
-    return !(slug === "restoran" || slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi" || slug === "oyunika" || slug === "monako-kulup" || slug.startsWith("home-"));
+    return !(slug === "restoran" || slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi" || slug === "oyunika" || slug === "parti-oyunu" || slug === "tetris-arena" || slug === "hain-avi" || slug === "monako-kulup" || slug.startsWith("home-"));
   }
 
   private season(): "autumn" | "spring" | "winter" | "summer" {
@@ -365,7 +374,7 @@ export class GameEngine {
     const outdoor = this.isOutdoor();
     // Mevsim parçacıkları
     const season = this.season();
-    const wantMotes = outdoor && weather === "none" && (season === "autumn" || season === "spring") ? 26 : 0;
+    const wantMotes = !gfx.low && outdoor && weather === "none" && (season === "autumn" || season === "spring") ? 26 : 0;
     while (this.motes.length < wantMotes) this.motes.push({ x: Math.random(), y: Math.random(), v: 0.05 + Math.random() * 0.07, r: 2 + Math.random() * 2.2, ph: Math.random() * 6.28, c: Math.floor(Math.random() * 4) });
     if (this.motes.length > wantMotes) this.motes.length = wantMotes;
     for (const m of this.motes) {
@@ -382,7 +391,7 @@ export class GameEngine {
     // Kuşlar: gündüz, açık havada arada bir geçer
     const nowMs = performance.now();
     const day = lighting.dark < 0.4;
-    if (outdoor && day && weather === "none" && nowMs > this.nextBird && this.birds.length < 4) {
+    if (!gfx.low && outdoor && day && weather === "none" && nowMs > this.nextBird && this.birds.length < 4) {
       const n = 2 + Math.floor(Math.random() * 3);
       const y0 = 0.08 + Math.random() * 0.25;
       for (let i = 0; i < n; i++) this.birds.push({ x: -0.05 - i * 0.035, y: y0 + i * 0.012 * (i % 2 ? 1 : -1), v: 0.07 + Math.random() * 0.01, ph: Math.random() * 6 });
@@ -609,7 +618,7 @@ export class GameEngine {
 
   private effectiveWeather(): "none" | "rain" | "snow" {
     const slug = this.room.slug;
-    if (slug === "restoran" || slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi" || slug === "oyunika" || slug === "sahil-kasabasi" || slug.startsWith("home-")) return "none";
+    if (slug === "restoran" || slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi" || slug === "oyunika" || slug === "parti-oyunu" || slug === "tetris-arena" || slug === "hain-avi" || slug === "sahil-kasabasi" || slug.startsWith("home-")) return "none";
     if (this.eventTheme === "snow" && this.isOutdoor()) return "snow";
     if (slug === "kis-koyu") return this.weather === "none" ? "none" : "snow";
     if (this.weather !== "auto") return this.weather;
@@ -647,8 +656,53 @@ export class GameEngine {
   }
 
   /** Yerel saate göre karartma; lamba/sokak lambası/TV/havuz/kamp ateşi çevresi parlar. */
+  private hasLos(ax: number, ay: number, bx: number, by: number): boolean {
+    const slug = this.room.slug;
+    if (!this.wallCache || this.wallCache.slug !== slug) {
+      const set = new Set<number>();
+      for (const [wx, wy] of roomWalls(slug)) set.add(wy * 1000 + wx);
+      this.wallCache = { slug, set };
+    }
+    const set = this.wallCache.set;
+    const dist = Math.hypot(bx - ax, by - ay);
+    const n = Math.ceil(dist / 0.25);
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      if (set.has(Math.round(ay + (by - ay) * t) * 1000 + Math.round(ax + (bx - ax) * t))) return false;
+    }
+    return true;
+  }
+
+  private canSee(gx: number, gy: number): boolean {
+    if (this.vision == null) return true;
+    const me = this.players.find((p) => p.id === this.myId);
+    if (!me) return true;
+    if (Math.hypot(gx - me.gx, gy - me.gy) > this.vision) return false;
+    return this.hasLos(me.gx, me.gy, gx, gy);
+  }
+
+  private drawVision(ctx: CanvasRenderingContext2D, l: Layout, width: number, height: number) {
+    if (this.vision == null) return;
+    const me = this.players.find((p) => p.id === this.myId);
+    if (!me) return;
+    const { sx, sy } = gridToScreen(me.gx, me.gy, l);
+    const cx = sx;
+    const cy = sy + l.tileH / 2 - 14 * l.scale;
+    const r = this.vision * l.tileW * 0.5;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, 0.58);
+    const g = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, r);
+    g.addColorStop(0, "rgba(2,6,23,0)");
+    g.addColorStop(0.75, "rgba(2,6,23,0.55)");
+    g.addColorStop(1, "rgba(2,6,23,0.96)");
+    ctx.fillStyle = g;
+    ctx.fillRect(-width * 3, -height * 6, width * 6, height * 12);
+    ctx.restore();
+  }
+
   private drawNight(ctx: CanvasRenderingContext2D, l: Layout, width: number, height: number) {
-    if (!this.nightEnabled || this.room.slug === "oyunika" || this.room.slug === "avm" || this.room.slug === "avm-kat2" || this.room.slug === "emlak-ofisi") return;
+    if (!this.nightEnabled || this.room.slug === "oyunika" || this.room.slug === "parti-oyunu" || this.room.slug === "tetris-arena" || this.room.slug === "hain-avi" || this.room.slug === "avm" || this.room.slug === "avm-kat2" || this.room.slug === "emlak-ofisi") return;
     const a = lighting.tintAlpha;
     const glow = lighting.dark;
     if (a >= 0.01) {
@@ -728,6 +782,10 @@ export class GameEngine {
       });
     }
     for (const [rx, ry] of roomRocks(this.room.slug)) items.push({ depth: rx + ry, draw: () => drawRock(ctx, rx, ry, l) });
+    for (const [wx, wy] of roomWalls(this.room.slug)) items.push({ depth: wx + wy + 0.2, draw: () => drawHainWall(ctx, wx, wy, l) });
+    if (this.room.slug === "parti-oyunu") PARTI_PODIUM.forEach((q, i) => items.push({ depth: q.gx + q.gy + 0.05, draw: () => drawPodiumBlock(ctx, q.gx, q.gy, i + 1, l, time) }));
+    for (const b of this.bodies) if (this.canSee(b.gx, b.gy)) items.push({ depth: b.gx + b.gy + 0.05, draw: () => drawHainBody(ctx, b.gx, b.gy, b.color, b.name, l, time) });
+    for (const m of this.marks) items.push({ depth: m.gx + m.gy - 0.2, draw: () => drawHainMark(ctx, m.gx, m.gy, m.icon, m.done, l, time) });
     if (this.flag) {
       const fl = this.flag;
       items.push({ depth: fl.gx + fl.gy + 0.05, draw: () => drawFlag(ctx, fl.gx, fl.gy, l, time) });
@@ -737,6 +795,8 @@ export class GameEngine {
       if (p.pet && pet) items.push({ depth: pet.gx + pet.gy + 0.05, draw: () => drawPet(ctx, p.pet as string, pet.gx, pet.gy, l, time, pet.moving) });
     }
     for (const p of this.players) {
+      if (p.hidden) continue;
+      if (this.vision != null && p.id !== this.myId && !this.canSee(p.gx, p.gy)) continue;
       if (p.isSitting && p.path.length === 0) {
         const seat = this.furniAt({ gx: Math.round(p.gx), gy: Math.round(p.gy) }, false);
         const def = seat ? FURNI_BY_TYPE[seat.type] : undefined;
@@ -745,7 +805,12 @@ export class GameEngine {
       } else {
         p.seatType = undefined;
       }
-      items.push({ depth: p.gx + p.gy + (p.seatType ? 0.7 : 0.1), draw: () => drawAvatar(ctx, p, l, p.id === this.myId, time) });
+      p.lift = this.room.slug === "parti-oyunu" ? podiumLift(p.gx, p.gy) : 0;
+      items.push({ depth: p.gx + p.gy + (p.seatType ? 0.7 : 0.1), draw: () => {
+        if (p.ghost) ctx.globalAlpha = 0.42;
+        drawAvatar(ctx, p, l, p.id === this.myId, time);
+        ctx.globalAlpha = 1;
+      } });
     }
     items.sort((a, b) => a.depth - b.depth);
     for (const it of items) it.draw();
@@ -775,6 +840,7 @@ export class GameEngine {
       ctx.globalAlpha = 1;
     }
 
+    this.drawVision(ctx, l, width, height);
     this.drawNight(ctx, l, width, height);
     this.drawMotes(ctx, width, height);
     this.drawEventFx(ctx, width, height);

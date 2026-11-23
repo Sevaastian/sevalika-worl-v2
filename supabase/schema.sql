@@ -35,6 +35,7 @@ create table if not exists public.profiles (
   skin_color       text not null default '#fed7aa' check (skin_color  ~ '^#[0-9a-fA-F]{6}$'),
   inventory        text[] not null default '{}',
   last_daily_claim timestamptz,
+  daily_streak int not null default 0,
   kicked_until     timestamptz,
   created_at       timestamptz not null default now()
 );
@@ -329,6 +330,8 @@ begin
     'skin_color', me.skin_color, 'hat', me.hat, 'glasses', me.glasses, 'top_style', me.top_style, 'back_style', me.back_style, 'status_text', me.status_text, 'guide_gift', me.guide_gift, 'hair_style', me.hair_style,
     'wardrobe', to_jsonb(me.wardrobe), 'inventory', to_jsonb(me.inventory),
     'can_claim_daily', (me.last_daily_claim is null or me.last_daily_claim <= now() - interval '24 hours'),
+    'daily_streak', case when me.last_daily_claim is null or me.last_daily_claim <= now() - interval '48 hours' then 0 else me.daily_streak end,
+    'streak_next', public._streak_next(me.last_daily_claim, me.daily_streak),
     'kicked_until', me.kicked_until, 'muted_until', me.muted_until, 'tool', me.tool,
     'xp', me.xp, 'pet', me.pet, 'room', me.current_room
   );
@@ -1811,7 +1814,10 @@ on conflict (slug) do nothing;
 insert into public.rooms (slug, name, min_role, cols, rows, spawn_x, spawn_y, furni, layout_v) values
   ('cadde-1', 'Cadde 1 - Meydan Bulvarı', 'user', 34, 22, 16, 10, '[{"id":"c1","type":"table","gx":3,"gy":1,"rot":0,"owner":null},{"id":"c2","type":"chair","gx":2,"gy":1,"rot":0,"owner":null},{"id":"c3","type":"chair","gx":4,"gy":1,"rot":0,"owner":null},{"id":"c4","type":"table","gx":3,"gy":3,"rot":0,"owner":null},{"id":"c5","type":"chair","gx":2,"gy":3,"rot":0,"owner":null},{"id":"c6","type":"chair","gx":4,"gy":3,"rot":0,"owner":null},{"id":"c7","type":"table","gx":6,"gy":1,"rot":0,"owner":null},{"id":"c8","type":"chair","gx":5,"gy":1,"rot":0,"owner":null},{"id":"c9","type":"chair","gx":7,"gy":1,"rot":0,"owner":null},{"id":"c10","type":"table","gx":6,"gy":3,"rot":0,"owner":null},{"id":"c11","type":"chair","gx":5,"gy":3,"rot":0,"owner":null},{"id":"c12","type":"chair","gx":7,"gy":3,"rot":0,"owner":null},{"id":"c13","type":"plant","gx":1,"gy":1,"rot":0,"owner":null},{"id":"c14","type":"plant","gx":1,"gy":5,"rot":0,"owner":null},{"id":"c15","type":"plant","gx":8,"gy":2,"rot":0,"owner":null},{"id":"c16","type":"plant","gx":8,"gy":4,"rot":0,"owner":null},{"id":"c17","type":"bench","gx":4,"gy":5,"rot":1,"owner":null},{"id":"c18","type":"bench","gx":6,"gy":5,"rot":1,"owner":null},{"id":"c19","type":"lamp","gx":9,"gy":3,"rot":0,"owner":null},{"id":"c20","type":"lamp","gx":14,"gy":3,"rot":0,"owner":null},{"id":"c21","type":"flower_bed","gx":10,"gy":4,"rot":0,"owner":null},{"id":"c22","type":"stall_red","gx":9,"gy":5,"rot":0,"owner":null},{"id":"c23","type":"stall_blue","gx":12,"gy":5,"rot":0,"owner":null},{"id":"c24","type":"kiosk","gx":14,"gy":2,"rot":0,"owner":null},{"id":"c25","type":"plant","gx":15,"gy":1,"rot":0,"owner":null},{"id":"c26","type":"plant","gx":17,"gy":1,"rot":0,"owner":null},{"id":"c27","type":"bench","gx":15,"gy":5,"rot":1,"owner":null},{"id":"c28","type":"bench","gx":17,"gy":5,"rot":1,"owner":null},{"id":"c29","type":"billboard","gx":18,"gy":2,"rot":0,"owner":null},{"id":"c30","type":"counter","gx":20,"gy":4,"rot":0,"owner":null},{"id":"c31","type":"lamp","gx":19,"gy":4,"rot":0,"owner":null},{"id":"c32","type":"lamp","gx":21,"gy":4,"rot":0,"owner":null},{"id":"c33","type":"stall_red","gx":18,"gy":5,"rot":0,"owner":null},{"id":"c34","type":"stall_blue","gx":21,"gy":5,"rot":0,"owner":null},{"id":"c35","type":"bench","gx":23,"gy":5,"rot":1,"owner":null},{"id":"c36","type":"bin","gx":24,"gy":5,"rot":0,"owner":null},{"id":"c37","type":"bench","gx":25,"gy":5,"rot":1,"owner":null},{"id":"c38","type":"plant","gx":25,"gy":1,"rot":0,"owner":null},{"id":"c39","type":"lamp","gx":26,"gy":3,"rot":0,"owner":null},{"id":"c40","type":"food_truck","gx":27,"gy":4,"rot":0,"owner":null},{"id":"c41","type":"table","gx":31,"gy":2,"rot":0,"owner":null},{"id":"c42","type":"chair","gx":30,"gy":2,"rot":0,"owner":null},{"id":"c43","type":"chair","gx":32,"gy":2,"rot":0,"owner":null},{"id":"c44","type":"lamp","gx":31,"gy":4,"rot":0,"owner":null},{"id":"c45","type":"bin","gx":32,"gy":5,"rot":0,"owner":null},{"id":"c46","type":"plant","gx":33,"gy":1,"rot":0,"owner":null},{"id":"c47","type":"car_red","gx":4,"gy":6,"rot":0,"owner":null},{"id":"c48","type":"car_blue","gx":10,"gy":9,"rot":0,"owner":null},{"id":"c49","type":"car_yellow","gx":22,"gy":6,"rot":0,"owner":null},{"id":"c50","type":"car_red","gx":27,"gy":9,"rot":0,"owner":null},{"id":"c51","type":"car_blue","gx":31,"gy":6,"rot":0,"owner":null},{"id":"c52","type":"car_yellow","gx":1,"gy":9,"rot":0,"owner":null},{"id":"c53","type":"bus_stop","gx":6,"gy":10,"rot":0,"owner":null},{"id":"c54","type":"phone_booth","gx":25,"gy":10,"rot":0,"owner":null},{"id":"c55","type":"bench","gx":13,"gy":10,"rot":1,"owner":null},{"id":"c56","type":"bench","gx":19,"gy":10,"rot":1,"owner":null},{"id":"c57","type":"bench","gx":29,"gy":10,"rot":0,"owner":null},{"id":"c58","type":"lamp","gx":3,"gy":10,"rot":0,"owner":null},{"id":"c59","type":"lamp","gx":11,"gy":10,"rot":0,"owner":null},{"id":"c60","type":"lamp","gx":21,"gy":10,"rot":0,"owner":null},{"id":"c61","type":"lamp","gx":30,"gy":10,"rot":0,"owner":null},{"id":"c62","type":"bin","gx":28,"gy":11,"rot":0,"owner":null},{"id":"c63","type":"bin","gx":1,"gy":11,"rot":0,"owner":null},{"id":"c64","type":"kiosk","gx":32,"gy":11,"rot":0,"owner":null},{"id":"c65","type":"clock_tower","gx":16,"gy":12,"rot":0,"owner":null},{"id":"c66","type":"fountain_big","gx":15,"gy":15,"rot":0,"owner":null},{"id":"c67","type":"bench","gx":14,"gy":14,"rot":0,"owner":null},{"id":"c68","type":"bench","gx":18,"gy":14,"rot":0,"owner":null},{"id":"c69","type":"bench","gx":14,"gy":19,"rot":1,"owner":null},{"id":"c70","type":"bench","gx":18,"gy":19,"rot":1,"owner":null},{"id":"c71","type":"bench","gx":13,"gy":15,"rot":0,"owner":null},{"id":"c72","type":"bench","gx":19,"gy":15,"rot":0,"owner":null},{"id":"c73","type":"bench","gx":13,"gy":17,"rot":0,"owner":null},{"id":"c74","type":"bench","gx":19,"gy":17,"rot":0,"owner":null},{"id":"c75","type":"flower_bed","gx":11,"gy":14,"rot":0,"owner":null},{"id":"c76","type":"flower_bed","gx":21,"gy":14,"rot":0,"owner":null},{"id":"c77","type":"flower_bed","gx":11,"gy":18,"rot":0,"owner":null},{"id":"c78","type":"flower_bed","gx":21,"gy":18,"rot":0,"owner":null},{"id":"c79","type":"lamp","gx":10,"gy":12,"rot":0,"owner":null},{"id":"c80","type":"lamp","gx":23,"gy":12,"rot":0,"owner":null},{"id":"c81","type":"lamp","gx":10,"gy":20,"rot":0,"owner":null},{"id":"c82","type":"lamp","gx":23,"gy":20,"rot":0,"owner":null},{"id":"c83","type":"lamp","gx":12,"gy":16,"rot":0,"owner":null},{"id":"c84","type":"lamp","gx":20,"gy":16,"rot":0,"owner":null},{"id":"c85","type":"tree","gx":2,"gy":14,"rot":0,"owner":null},{"id":"c86","type":"tree","gx":7,"gy":19,"rot":0,"owner":null},{"id":"c87","type":"tree","gx":4,"gy":17,"rot":0,"owner":null},{"id":"c88","type":"bench","gx":5,"gy":13,"rot":0,"owner":null},{"id":"c89","type":"bench","gx":8,"gy":16,"rot":1,"owner":null},{"id":"c90","type":"plant","gx":2,"gy":12,"rot":0,"owner":null},{"id":"c91","type":"plant","gx":8,"gy":12,"rot":0,"owner":null},{"id":"c92","type":"plant","gx":3,"gy":20,"rot":0,"owner":null},{"id":"c93","type":"flower_bed","gx":2,"gy":16,"rot":0,"owner":null},{"id":"c94","type":"campfire","gx":6,"gy":15,"rot":0,"owner":null},{"id":"c95","type":"logseat","gx":6,"gy":14,"rot":0,"owner":null},{"id":"c96","type":"logseat","gx":7,"gy":15,"rot":0,"owner":null},{"id":"c97","type":"logseat","gx":6,"gy":16,"rot":0,"owner":null},{"id":"c98","type":"table","gx":2,"gy":19,"rot":0,"owner":null},{"id":"c99","type":"chair","gx":1,"gy":19,"rot":0,"owner":null},{"id":"c100","type":"chair","gx":3,"gy":19,"rot":0,"owner":null},{"id":"c101","type":"tree","gx":28,"gy":14,"rot":0,"owner":null},{"id":"c102","type":"tree","gx":31,"gy":19,"rot":0,"owner":null},{"id":"c103","type":"tree","gx":29,"gy":17,"rot":0,"owner":null},{"id":"c104","type":"bench","gx":27,"gy":13,"rot":0,"owner":null},{"id":"c105","type":"bench","gx":25,"gy":16,"rot":1,"owner":null},{"id":"c106","type":"plant","gx":25,"gy":12,"rot":0,"owner":null},{"id":"c107","type":"plant","gx":32,"gy":12,"rot":0,"owner":null},{"id":"c108","type":"plant","gx":32,"gy":20,"rot":0,"owner":null},{"id":"c109","type":"flower_bed","gx":29,"gy":20,"rot":0,"owner":null},{"id":"c110","type":"campfire","gx":28,"gy":16,"rot":0,"owner":null},{"id":"c111","type":"logseat","gx":28,"gy":15,"rot":0,"owner":null},{"id":"c112","type":"logseat","gx":27,"gy":16,"rot":0,"owner":null},{"id":"c113","type":"logseat","gx":28,"gy":17,"rot":0,"owner":null},{"id":"c114","type":"table","gx":31,"gy":15,"rot":0,"owner":null},{"id":"c115","type":"chair","gx":30,"gy":15,"rot":0,"owner":null},{"id":"c116","type":"chair","gx":32,"gy":15,"rot":0,"owner":null}]'::jsonb, 15),
 ('sahil-kasabasi', '🌴 Sahil Kasabası', 'user', 20, 16, 2, 9, '[{"id":"sk_cafe","type":"beach_cafe","gx":2,"gy":0,"rot":0,"owner":null},{"id":"sk_bar","type":"tiki_bar","gx":0,"gy":3,"rot":0,"owner":null},{"id":"sk_fl1","type":"flower_bed","gx":6,"gy":0,"rot":0,"owner":null},{"id":"sk4","type":"table","gx":7,"gy":2,"rot":0,"owner":null},{"id":"sk5","type":"chair","gx":6,"gy":2,"rot":0,"owner":null},{"id":"sk6","type":"chair","gx":8,"gy":2,"rot":0,"owner":null},{"id":"sk7","type":"umbrella","gx":7,"gy":1,"rot":0,"owner":null},{"id":"sk8","type":"palm","gx":0,"gy":1,"rot":0,"owner":null},{"id":"sk9","type":"palm","gx":0,"gy":7,"rot":0,"owner":null},{"id":"sk18","type":"bench","gx":6,"gy":4,"rot":0,"owner":null},{"id":"sk19","type":"streetlight","gx":8,"gy":3,"rot":0,"owner":null},{"id":"sk20","type":"streetlight","gx":1,"gy":6,"rot":0,"owner":null},{"id":"sk11","type":"lounger","gx":3,"gy":6,"rot":0,"owner":null},{"id":"sk12","type":"umbrella","gx":4,"gy":6,"rot":0,"owner":null},{"id":"sk13","type":"lounger","gx":5,"gy":6,"rot":0,"owner":null},{"id":"sk15","type":"lounger","gx":3,"gy":9,"rot":0,"owner":null},{"id":"sk17","type":"umbrella","gx":4,"gy":9,"rot":0,"owner":null},{"id":"sk16","type":"lounger","gx":5,"gy":9,"rot":0,"owner":null},{"id":"sk44","type":"lounger","gx":3,"gy":11,"rot":0,"owner":null},{"id":"sk45","type":"lounger","gx":5,"gy":11,"rot":0,"owner":null},{"id":"sk21","type":"campfire","gx":4,"gy":14,"rot":0,"owner":null},{"id":"sk22","type":"logseat","gx":3,"gy":13,"rot":0,"owner":null},{"id":"sk23","type":"logseat","gx":5,"gy":13,"rot":1,"owner":null},{"id":"sk24","type":"logseat","gx":3,"gy":15,"rot":0,"owner":null},{"id":"sk25","type":"logseat","gx":5,"gy":15,"rot":1,"owner":null},{"id":"sk26","type":"palm","gx":1,"gy":12,"rot":0,"owner":null},{"id":"sk27","type":"palm","gx":7,"gy":12,"rot":0,"owner":null},{"id":"sk_fl2","type":"flower_bed","gx":0,"gy":15,"rot":0,"owner":null},{"id":"sk_dj","type":"dj_booth","gx":10,"gy":0,"rot":0,"owner":null},{"id":"sk29","type":"palm","gx":9,"gy":1,"rot":0,"owner":null},{"id":"sk30","type":"palm","gx":14,"gy":1,"rot":0,"owner":null},{"id":"sk46","type":"palm","gx":14,"gy":4,"rot":0,"owner":null},{"id":"sk47","type":"streetlight","gx":9,"gy":4,"rot":0,"owner":null},{"id":"sk48","type":"streetlight","gx":14,"gy":3,"rot":0,"owner":null},{"id":"sk42","type":"surfboard","gx":8,"gy":5,"rot":0,"owner":null},{"id":"sk43","type":"surfboard","gx":9,"gy":5,"rot":0,"owner":null},{"id":"sk49","type":"surfboard","gx":11,"gy":5,"rot":0,"owner":null},{"id":"sk50","type":"streetlight","gx":12,"gy":5,"rot":0,"owner":null},{"id":"sk_fish","type":"fish_hut","gx":13,"gy":6,"rot":0,"owner":null},{"id":"sk31","type":"bench","gx":15,"gy":10,"rot":0,"owner":null},{"id":"sk51","type":"bench","gx":15,"gy":12,"rot":0,"owner":null},{"id":"sk32","type":"streetlight","gx":14,"gy":9,"rot":0,"owner":null},{"id":"sk52","type":"bin","gx":14,"gy":10,"rot":0,"owner":null},{"id":"sk40","type":"food_truck","gx":8,"gy":13,"rot":0,"owner":null},{"id":"sk41","type":"kiosk","gx":11,"gy":10,"rot":0,"owner":null},{"id":"sk53","type":"table","gx":7,"gy":14,"rot":0,"owner":null},{"id":"sk54","type":"plant","gx":6,"gy":13,"rot":0,"owner":null},{"id":"sk55","type":"bin","gx":11,"gy":13,"rot":0,"owner":null},{"id":"sk33","type":"beanbag","gx":12,"gy":12,"rot":0,"owner":null},{"id":"sk34","type":"beanbag","gx":14,"gy":12,"rot":1,"owner":null},{"id":"sk35","type":"beanbag","gx":13,"gy":13,"rot":0,"owner":null},{"id":"sk36","type":"table","gx":13,"gy":12,"rot":0,"owner":null},{"id":"sk37","type":"palm","gx":15,"gy":14,"rot":0,"owner":null},{"id":"sk56","type":"plant","gx":11,"gy":15,"rot":0,"owner":null}]'::jsonb, 11),
-  ('oyunika', '🎲 Oyunika Parkuru', 'user', 15, 8, 1, 1, '[{"id":"oy1","type":"lamp","gx":0,"gy":0,"rot":0,"owner":null},{"id":"oy2","type":"lamp","gx":14,"gy":0,"rot":0,"owner":null},{"id":"oy3","type":"plant","gx":14,"gy":6,"rot":0,"owner":null},{"id":"oy4","type":"palm","gx":3,"gy":0,"rot":0,"owner":null},{"id":"oy5","type":"palm","gx":11,"gy":0,"rot":0,"owner":null},{"id":"oy6","type":"lamp","gx":7,"gy":0,"rot":0,"owner":null},{"id":"oy7","type":"plant","gx":2,"gy":7,"rot":0,"owner":null},{"id":"oy8","type":"plant","gx":5,"gy":7,"rot":0,"owner":null},{"id":"oy9","type":"plant","gx":9,"gy":7,"rot":0,"owner":null},{"id":"oy10","type":"plant","gx":12,"gy":7,"rot":0,"owner":null},{"id":"oy11","type":"bench","gx":7,"gy":7,"rot":0,"owner":null},{"id":"oy12","type":"lamp","gx":14,"gy":7,"rot":0,"owner":null}]'::jsonb, 10),
+  ('oyunika', '🎮 Oyunika', 'user', 18, 12, 1, 10, '[{"id":"oyk1","type":"rug","gx":4,"gy":4,"rot":0,"owner":null},{"id":"oyk2","type":"rug","gx":5,"gy":4,"rot":0,"owner":null},{"id":"oyk3","type":"rug","gx":6,"gy":4,"rot":0,"owner":null},{"id":"oyk4","type":"rug","gx":12,"gy":4,"rot":0,"owner":null},{"id":"oyk5","type":"rug","gx":13,"gy":4,"rot":0,"owner":null},{"id":"oyk6","type":"rug","gx":14,"gy":4,"rot":0,"owner":null},{"id":"oyk7","type":"tv","gx":2,"gy":0,"rot":0,"owner":null},{"id":"oyk8","type":"tv","gx":4,"gy":0,"rot":0,"owner":null},{"id":"oyk9","type":"tv","gx":6,"gy":0,"rot":0,"owner":null},{"id":"oyk10","type":"tv","gx":11,"gy":0,"rot":0,"owner":null},{"id":"oyk11","type":"tv","gx":13,"gy":0,"rot":0,"owner":null},{"id":"oyk12","type":"tv","gx":15,"gy":0,"rot":0,"owner":null},{"id":"oyk13","type":"lamp","gx":0,"gy":0,"rot":0,"owner":null},{"id":"oyk14","type":"lamp","gx":17,"gy":0,"rot":0,"owner":null},{"id":"oyk15","type":"lamp","gx":9,"gy":0,"rot":0,"owner":null},{"id":"oyk16","type":"plant","gx":2,"gy":5,"rot":0,"owner":null},{"id":"oyk17","type":"plant","gx":8,"gy":5,"rot":0,"owner":null},{"id":"oyk18","type":"plant","gx":10,"gy":5,"rot":0,"owner":null},{"id":"oyk19","type":"plant","gx":16,"gy":5,"rot":0,"owner":null},{"id":"oyk20","type":"bench","gx":5,"gy":7,"rot":0,"owner":null},{"id":"oyk21","type":"bench","gx":13,"gy":7,"rot":0,"owner":null},{"id":"oyk22","type":"sofa","gx":8,"gy":8,"rot":0,"owner":null},{"id":"oyk23","type":"sofa","gx":10,"gy":8,"rot":0,"owner":null},{"id":"oyk24","type":"table","gx":9,"gy":8,"rot":0,"owner":null},{"id":"oyk25","type":"palm","gx":17,"gy":11,"rot":0,"owner":null},{"id":"oyk26","type":"palm","gx":17,"gy":7,"rot":0,"owner":null},{"id":"oyk27","type":"lamp","gx":0,"gy":6,"rot":0,"owner":null},{"id":"oyk28","type":"plant","gx":3,"gy":11,"rot":0,"owner":null},{"id":"oyk29","type":"plant","gx":14,"gy":11,"rot":0,"owner":null}]'::jsonb, 12),
+  ('parti-oyunu', '🎉 Parti Oyunu', 'user', 31, 27, 2, 2, '[{"id":"pt1","type":"palm","gx":5,"gy":4,"rot":0,"owner":null},{"id":"pt2","type":"lamp","gx":9,"gy":4,"rot":0,"owner":null},{"id":"pt3","type":"bench","gx":13,"gy":4,"rot":0,"owner":null},{"id":"pt4","type":"plant","gx":17,"gy":4,"rot":0,"owner":null},{"id":"pt5","type":"palm","gx":21,"gy":4,"rot":0,"owner":null},{"id":"pt6","type":"plant","gx":25,"gy":4,"rot":0,"owner":null},{"id":"pt7","type":"lamp","gx":5,"gy":8,"rot":0,"owner":null},{"id":"pt8","type":"bench","gx":9,"gy":8,"rot":0,"owner":null},{"id":"pt9","type":"plant","gx":13,"gy":8,"rot":0,"owner":null},{"id":"pt10","type":"palm","gx":17,"gy":8,"rot":0,"owner":null},{"id":"pt11","type":"plant","gx":21,"gy":8,"rot":0,"owner":null},{"id":"pt12","type":"palm","gx":25,"gy":8,"rot":0,"owner":null},{"id":"pt13","type":"bench","gx":5,"gy":12,"rot":0,"owner":null},{"id":"pt14","type":"plant","gx":9,"gy":12,"rot":0,"owner":null},{"id":"pt15","type":"palm","gx":13,"gy":12,"rot":0,"owner":null},{"id":"pt16","type":"plant","gx":17,"gy":12,"rot":0,"owner":null},{"id":"pt17","type":"palm","gx":21,"gy":12,"rot":0,"owner":null},{"id":"pt18","type":"lamp","gx":25,"gy":12,"rot":0,"owner":null},{"id":"pt19","type":"plant","gx":5,"gy":16,"rot":0,"owner":null},{"id":"pt20","type":"palm","gx":9,"gy":16,"rot":0,"owner":null},{"id":"pt21","type":"plant","gx":13,"gy":16,"rot":0,"owner":null},{"id":"pt22","type":"palm","gx":17,"gy":16,"rot":0,"owner":null},{"id":"pt23","type":"lamp","gx":21,"gy":16,"rot":0,"owner":null},{"id":"pt24","type":"bench","gx":25,"gy":16,"rot":0,"owner":null},{"id":"pt25","type":"palm","gx":5,"gy":20,"rot":0,"owner":null},{"id":"pt26","type":"plant","gx":9,"gy":20,"rot":0,"owner":null},{"id":"pt27","type":"palm","gx":13,"gy":20,"rot":0,"owner":null},{"id":"pt28","type":"lamp","gx":17,"gy":20,"rot":0,"owner":null},{"id":"pt29","type":"bench","gx":21,"gy":20,"rot":0,"owner":null},{"id":"pt30","type":"plant","gx":25,"gy":20,"rot":0,"owner":null},{"id":"pt31","type":"lamp","gx":5,"gy":26,"rot":0,"owner":null},{"id":"pt32","type":"lamp","gx":13,"gy":26,"rot":0,"owner":null},{"id":"pt33","type":"plant","gx":17,"gy":26,"rot":0,"owner":null},{"id":"pt34","type":"lamp","gx":21,"gy":26,"rot":0,"owner":null},{"id":"pt35","type":"plant","gx":25,"gy":26,"rot":0,"owner":null},{"id":"pt36","type":"lamp","gx":0,"gy":8,"rot":0,"owner":null},{"id":"pt37","type":"lamp","gx":0,"gy":14,"rot":0,"owner":null},{"id":"pt38","type":"lamp","gx":0,"gy":20,"rot":0,"owner":null},{"id":"pt39","type":"palm","gx":29,"gy":25,"rot":0,"owner":null},{"id":"pt40","type":"palm","gx":29,"gy":0,"rot":0,"owner":null},{"id":"pt41","type":"lamp","gx":0,"gy":0,"rot":0,"owner":null}]'::jsonb, 13),
+  ('hain-avi', '🚀 Hain Avı', 'user', 28, 18, 13, 8, '[{"id":"h1","type":"tv","gx":3,"gy":1,"rot":0,"owner":null},{"id":"h2","type":"tv","gx":5,"gy":1,"rot":0,"owner":null},{"id":"h3","type":"tv","gx":7,"gy":1,"rot":0,"owner":null},{"id":"h4","type":"chair","gx":4,"gy":3,"rot":0,"owner":null},{"id":"h5","type":"bookshelf","gx":11,"gy":1,"rot":0,"owner":null},{"id":"h6","type":"bookshelf","gx":15,"gy":1,"rot":0,"owner":null},{"id":"h7","type":"plant","gx":16,"gy":4,"rot":0,"owner":null},{"id":"h8","type":"ore_cart","gx":12,"gy":4,"rot":0,"owner":null},{"id":"h9","type":"tv","gx":21,"gy":1,"rot":0,"owner":null},{"id":"h10","type":"tv","gx":25,"gy":1,"rot":0,"owner":null},{"id":"h11","type":"lamp","gx":20,"gy":4,"rot":0,"owner":null},{"id":"h12","type":"lamp","gx":26,"gy":4,"rot":0,"owner":null},{"id":"h13","type":"bed","gx":1,"gy":8,"rot":0,"owner":null},{"id":"h14","type":"bed","gx":1,"gy":10,"rot":0,"owner":null},{"id":"h15","type":"plant","gx":5,"gy":7,"rot":0,"owner":null},{"id":"h16","type":"bin","gx":5,"gy":11,"rot":0,"owner":null},{"id":"h17","type":"casinotable","gx":13,"gy":10,"rot":0,"owner":null},{"id":"h18","type":"sofa","gx":10,"gy":8,"rot":1,"owner":null},{"id":"h19","type":"sofa","gx":17,"gy":8,"rot":0,"owner":null},{"id":"h20","type":"plant","gx":8,"gy":7,"rot":0,"owner":null},{"id":"h21","type":"plant","gx":19,"gy":7,"rot":0,"owner":null},{"id":"h22","type":"plant","gx":8,"gy":11,"rot":0,"owner":null},{"id":"h23","type":"plant","gx":19,"gy":11,"rot":0,"owner":null},{"id":"h24","type":"tv","gx":23,"gy":8,"rot":0,"owner":null},{"id":"h25","type":"tv","gx":25,"gy":8,"rot":0,"owner":null},{"id":"h26","type":"lamp","gx":26,"gy":10,"rot":0,"owner":null},{"id":"h27","type":"counter","gx":2,"gy":14,"rot":0,"owner":null},{"id":"h28","type":"kitchen_block","gx":5,"gy":14,"rot":0,"owner":null},{"id":"h29","type":"bin","gx":8,"gy":16,"rot":0,"owner":null},{"id":"h30","type":"plant","gx":1,"gy":16,"rot":0,"owner":null},{"id":"h31","type":"table","gx":11,"gy":14,"rot":0,"owner":null},{"id":"h32","type":"table","gx":15,"gy":14,"rot":0,"owner":null},{"id":"h33","type":"bookshelf","gx":16,"gy":16,"rot":0,"owner":null},{"id":"h34","type":"plant","gx":10,"gy":16,"rot":0,"owner":null},{"id":"h35","type":"ore_cart","gx":21,"gy":14,"rot":0,"owner":null},{"id":"h36","type":"ore_cart","gx":25,"gy":14,"rot":0,"owner":null},{"id":"h38","type":"lamp","gx":26,"gy":16,"rot":0,"owner":null}]'::jsonb, 12),
+  ('tetris-arena', '🧱 Blok Rüzgârı Arenası', 'user', 20, 14, 2, 11, '[{"id":"tt1","type":"lamp","gx":0,"gy":0,"rot":0,"owner":null},{"id":"tt2","type":"lamp","gx":19,"gy":0,"rot":0,"owner":null},{"id":"tt3","type":"lamp","gx":19,"gy":13,"rot":0,"owner":null},{"id":"tt4","type":"lamp","gx":0,"gy":6,"rot":0,"owner":null},{"id":"tt5","type":"sofa","gx":5,"gy":4,"rot":0,"owner":null},{"id":"tt6","type":"sofa","gx":9,"gy":4,"rot":0,"owner":null},{"id":"tt7","type":"sofa","gx":13,"gy":4,"rot":0,"owner":null},{"id":"tt8","type":"table","gx":7,"gy":8,"rot":0,"owner":null},{"id":"tt9","type":"table","gx":12,"gy":8,"rot":0,"owner":null},{"id":"tt10","type":"plant","gx":3,"gy":0,"rot":0,"owner":null},{"id":"tt11","type":"plant","gx":8,"gy":0,"rot":0,"owner":null},{"id":"tt12","type":"plant","gx":12,"gy":0,"rot":0,"owner":null},{"id":"tt13","type":"plant","gx":16,"gy":0,"rot":0,"owner":null},{"id":"tt14","type":"palm","gx":17,"gy":11,"rot":0,"owner":null},{"id":"tt15","type":"palm","gx":17,"gy":6,"rot":0,"owner":null},{"id":"tt16","type":"plant","gx":3,"gy":13,"rot":0,"owner":null},{"id":"tt17","type":"plant","gx":10,"gy":13,"rot":0,"owner":null},{"id":"tt18","type":"plant","gx":15,"gy":13,"rot":0,"owner":null},{"id":"tt19","type":"bench","gx":5,"gy":11,"rot":0,"owner":null},{"id":"tt20","type":"bench","gx":9,"gy":11,"rot":0,"owner":null}]'::jsonb, 12),
   ('vip-cati-kati', 'VIP Çatı Katı', 'vip', 18, 14, 8, 8, '[{"id":"v1","type":"fountain","gx":9,"gy":3,"rot":0,"owner":null},{"id":"v2","type":"rug","gx":9,"gy":7,"rot":0,"owner":null},{"id":"v3","type":"rug","gx":10,"gy":7,"rot":0,"owner":null},{"id":"v4","type":"table","gx":9,"gy":7,"rot":0,"owner":null},{"id":"v5","type":"sofa","gx":7,"gy":7,"rot":0,"owner":null},{"id":"v6","type":"sofa","gx":12,"gy":7,"rot":1,"owner":null},{"id":"v7","type":"palm","gx":2,"gy":2,"rot":0,"owner":null},{"id":"v8","type":"palm","gx":15,"gy":2,"rot":0,"owner":null},{"id":"v9","type":"palm","gx":2,"gy":11,"rot":0,"owner":null},{"id":"v10","type":"palm","gx":15,"gy":11,"rot":0,"owner":null},{"id":"v11","type":"lounger","gx":3,"gy":7,"rot":0,"owner":null},{"id":"v12","type":"lounger","gx":5,"gy":7,"rot":0,"owner":null},{"id":"v13","type":"lounger","gx":3,"gy":11,"rot":0,"owner":null},{"id":"v14","type":"lounger","gx":5,"gy":11,"rot":0,"owner":null},{"id":"v15","type":"umbrella","gx":4,"gy":7,"rot":0,"owner":null},{"id":"v16","type":"umbrella","gx":4,"gy":11,"rot":0,"owner":null},{"id":"v17","type":"tiki_bar","gx":13,"gy":2,"rot":0,"owner":null},{"id":"v18","type":"chair","gx":13,"gy":4,"rot":0,"owner":null},{"id":"v19","type":"chair","gx":14,"gy":4,"rot":0,"owner":null},{"id":"v20","type":"lamp","gx":6,"gy":2,"rot":0,"owner":null},{"id":"v21","type":"lamp","gx":11,"gy":2,"rot":0,"owner":null},{"id":"v22","type":"lamp","gx":8,"gy":12,"rot":0,"owner":null},{"id":"v23","type":"lamp","gx":12,"gy":12,"rot":0,"owner":null},{"id":"v24","type":"plant","gx":1,"gy":6,"rot":0,"owner":null},{"id":"v25","type":"plant","gx":1,"gy":8,"rot":0,"owner":null},{"id":"v26","type":"plant","gx":8,"gy":5,"rot":0,"owner":null},{"id":"v27","type":"plant","gx":10,"gy":5,"rot":0,"owner":null},{"id":"v28","type":"bench","gx":12,"gy":11,"rot":1,"owner":null},{"id":"v29","type":"bench","gx":14,"gy":11,"rot":1,"owner":null},{"id":"v30","type":"beanbag","gx":15,"gy":7,"rot":0,"owner":null},{"id":"v31","type":"beanbag","gx":15,"gy":8,"rot":0,"owner":null}]'::jsonb, 10),
   ('monako-kulup', 'Monako Kulüp', 'user', 18, 14, 8, 10, '[{"id":"mk1","type":"casinotable","gx":5,"gy":6,"rot":0,"owner":null},{"id":"mk2","type":"casinotable","gx":11,"gy":6,"rot":0,"owner":null},{"id":"mk3","type":"casinotable","gx":5,"gy":9,"rot":0,"owner":null},{"id":"mk4","type":"casinotable","gx":11,"gy":9,"rot":0,"owner":null},{"id":"mk5","type":"rug","gx":5,"gy":6,"rot":0,"owner":null},{"id":"mk6","type":"rug","gx":11,"gy":6,"rot":0,"owner":null},{"id":"mk7","type":"rug","gx":5,"gy":9,"rot":0,"owner":null},{"id":"mk8","type":"rug","gx":11,"gy":9,"rot":0,"owner":null},{"id":"mk9","type":"rug","gx":8,"gy":12,"rot":0,"owner":null},{"id":"mk10","type":"rug","gx":8,"gy":11,"rot":0,"owner":null},{"id":"mk11","type":"rug","gx":8,"gy":10,"rot":0,"owner":null},{"id":"mk20","type":"tv","gx":14,"gy":1,"rot":0,"owner":null},{"id":"mk22","type":"sofa","gx":13,"gy":3,"rot":0,"owner":null},{"id":"mk23","type":"sofa","gx":15,"gy":3,"rot":1,"owner":null},{"id":"mk24","type":"table","gx":14,"gy":3,"rot":0,"owner":null},{"id":"mk25","type":"sofa","gx":13,"gy":12,"rot":0,"owner":null},{"id":"mk26","type":"sofa","gx":15,"gy":12,"rot":1,"owner":null},{"id":"mk27","type":"table","gx":14,"gy":12,"rot":0,"owner":null},{"id":"mk28","type":"plant","gx":1,"gy":1,"rot":0,"owner":null},{"id":"mk29","type":"plant","gx":16,"gy":1,"rot":0,"owner":null},{"id":"mk30","type":"plant","gx":1,"gy":12,"rot":0,"owner":null},{"id":"mk31","type":"plant","gx":16,"gy":12,"rot":0,"owner":null},{"id":"mk32","type":"plant","gx":4,"gy":12,"rot":0,"owner":null},{"id":"mk33","type":"plant","gx":12,"gy":12,"rot":0,"owner":null},{"id":"mk34","type":"lamp","gx":5,"gy":2,"rot":0,"owner":null},{"id":"mk35","type":"lamp","gx":12,"gy":2,"rot":0,"owner":null},{"id":"mk36","type":"lamp","gx":3,"gy":8,"rot":0,"owner":null},{"id":"mk37","type":"lamp","gx":13,"gy":8,"rot":0,"owner":null},{"id":"mon1","type":"casino_bar","gx":6,"gy":0,"rot":0,"owner":null},{"id":"mon2","type":"bookshelf","gx":3,"gy":0,"rot":0,"owner":null},{"id":"mon3","type":"bookshelf","gx":12,"gy":0,"rot":0,"owner":null},{"id":"mon4","type":"sofa","gx":1,"gy":4,"rot":0,"owner":null},{"id":"mon5","type":"sofa","gx":1,"gy":7,"rot":0,"owner":null},{"id":"mon6","type":"table","gx":2,"gy":6,"rot":0,"owner":null}]'::jsonb, 10),
   ('iskele', 'Sahil İskelesi', 'user', 15, 15, 5, 7, '[{"id":"is1","type":"palm","gx":1,"gy":2,"rot":0,"owner":null},{"id":"is2","type":"palm","gx":1,"gy":12,"rot":0,"owner":null},{"id":"is3","type":"lounger","gx":2,"gy":4,"rot":0,"owner":null},{"id":"is4","type":"lounger","gx":2,"gy":6,"rot":0,"owner":null},{"id":"is5","type":"bench","gx":4,"gy":11,"rot":0,"owner":null},{"id":"is6","type":"streetlight","gx":7,"gy":1,"rot":0,"owner":null},{"id":"is7","type":"streetlight","gx":7,"gy":6,"rot":0,"owner":null},{"id":"is8","type":"streetlight","gx":7,"gy":12,"rot":0,"owner":null},{"id":"is9","type":"kiosk","gx":3,"gy":1,"rot":0,"owner":null},{"id":"is10","type":"bin","gx":5,"gy":2,"rot":0,"owner":null},{"id":"isz1","type":"fish_hut","gx":3,"gy":12,"rot":0,"owner":null}]'::jsonb, 10),
@@ -2806,6 +2812,308 @@ revoke all on public.profiles, public.rooms, public.admin_events, public.public_
 grant select on public.profiles, public.rooms, public.admin_events, public.public_profiles,
                 public.messages, public.user_events to authenticated;
 
+-- ---------- v21: günlük giriş serisi ----------------------------------------
+alter table public.profiles add column if not exists daily_streak int not null default 0;
+
+create or replace function public._streak_next(last timestamptz, cur int) returns int
+language sql immutable set search_path = '' as $$
+  select case when last is null or last <= now() - interval '48 hours' then 1 else (cur % 7) + 1 end $$;
+
+-- 7 günlük ödül çizelgesi (constants.ts DAILY_REWARDS ile aynı)
+create or replace function public._streak_reward(d int) returns int
+language sql immutable set search_path = '' as $$
+  select (array[500, 550, 650, 750, 900, 1100, 2000])[greatest(1, least(7, d))] $$;
+
+create or replace function public.claim_daily() returns int
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; new_coins int; d int;
+begin
+  me := public._me();
+  if me.last_daily_claim is not null and me.last_daily_claim > now() - interval '24 hours' then
+    raise exception 'Günlük ödülü zaten aldın.';
+  end if;
+  d := public._streak_next(me.last_daily_claim, me.daily_streak);
+  update public.profiles
+     set coins = coins + public._streak_reward(d) * public._event_mult(), last_daily_claim = now(), daily_streak = d
+   where id = me.id returning coins into new_coins;
+  perform public._badge_add(me.id, 'login');
+  return new_coins;
+end $$;
+
+-- ---------- v20: güvenlik ve moderasyon ------------------------------------
+
+-- Oyuncu engelleme
+create table if not exists public.user_blocks (
+  blocker    uuid not null references public.profiles(id) on delete cascade,
+  blocked    uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker, blocked)
+);
+alter table public.user_blocks enable row level security;
+revoke all on public.user_blocks from anon, authenticated;
+
+create or replace function public._is_blocked(a uuid, b uuid) returns boolean
+language sql stable set search_path = '' as $$
+  select exists (select 1 from public.user_blocks
+                  where (blocker = a and blocked = b) or (blocker = b and blocked = a)) $$;
+
+create or replace function public.block_user(p_username text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles;
+begin
+  me := public._me();
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendini engelleyemezsin.'; end if;
+  if (select count(*) from public.user_blocks where blocker = me.id) >= 100 then raise exception 'En fazla 100 kişiyi engelleyebilirsin.'; end if;
+  insert into public.user_blocks (blocker, blocked) values (me.id, t.id) on conflict do nothing;
+  -- arkadaşlık varsa kaldır
+  delete from public.friendships
+   where (requester = me.id and addressee = t.id) or (requester = t.id and addressee = me.id);
+end $$;
+
+create or replace function public.unblock_user(p_username text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles;
+begin
+  me := public._me();
+  t := public._find_user(p_username);
+  delete from public.user_blocks where blocker = me.id and blocked = t.id;
+end $$;
+
+create or replace function public.my_blocks() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles;
+begin
+  me := public._me();
+  return coalesce((select jsonb_agg(p.username order by p.username)
+                     from public.user_blocks b join public.profiles p on p.id = b.blocked
+                    where b.blocker = me.id), '[]'::jsonb);
+end $$;
+
+-- Sohbet temizleyici: küfür maskeleme, bağlantı engeli, tekrar eden harf sıkıştırma
+create or replace function public._clean_chat(p_txt text, p_role text) returns text
+language plpgsql immutable set search_path = '' as $$
+declare t text := p_txt;
+begin
+  if p_role = 'admin' then return t; end if;
+  t := regexp_replace(t, '(https?://|www\.)\S+', '[bağlantı]', 'gi');
+  t := regexp_replace(t, '\m[a-z0-9-]+\.(com|net|org|xyz|gg|io|tk|ru|info|me)(/\S*)?\M', '[bağlantı]', 'gi');
+  t := regexp_replace(t, '(.)\1{5,}', '\1\1\1', 'g');
+  t := regexp_replace(t,
+    '(\ma+m+[kq]+\M|\ma+q+\M|\mam[iı]n[aıeiu]\w*|\mo+r+o+s+p+u+\w*|\mp+[iı]+ç+(ler|lik|in)?\M|\ms+i+k+t+i+r+\w*|\ms+i+k+e+[yr]\w*|\ms+i+k+i+k+\M|\my+a+r+r*a+k+\w*|\mi+b+n+e+\M|\mg+ö+t+(v+e+r+e+n+)?\M|\mk+a+h+p+e+\M|\mf+u+c+k+\w*|\ms+h+i+t+\M|\mb+i+t+c+h+\w*)',
+    '***', 'gi');
+  return t;
+end $$;
+
+-- Sabit odalar arası geçiş: sunucuda bilinen son konum bir kapıya yakın olmalı
+create or replace function public._portal_ok(p_from text, p_to text, p_x int, p_y int) returns boolean
+language sql immutable set search_path = '' as $$
+  select exists (
+    select 1 from (values
+    ('cadde-1', 'monako-kulup', 28, 0),
+    ('cadde-1', 'vip-cati-kati', 16, 21),
+    ('cadde-1', 'iskele', 0, 7),
+    ('cadde-1', 'sahil-kasabasi', 0, 15),
+    ('cadde-1', 'avm', 11, 0),
+    ('cadde-1', 'emlak-ofisi', 6, 21),
+    ('cadde-1', 'oyunika', 20, 0),
+    ('cadde-1', 'kis-koyu', 33, 17),
+    ('emlak-ofisi', 'cadde-1', 8, 11),
+    ('avm', 'cadde-1', 13, 19),
+    ('avm', 'avm-kat2', 27, 10),
+    ('avm-kat2', 'avm', 0, 8),
+    ('kis-koyu', 'cadde-1', 0, 8),
+    ('sahil-kasabasi', 'cadde-1', 0, 9),
+    ('oyunika', 'cadde-1', 0, 10),
+    ('parti-oyunu', 'oyunika', 0, 26),
+    ('tetris-arena', 'oyunika', 0, 13),
+    ('vip-cati-kati', 'cadde-1', 17, 7),
+    ('monako-kulup', 'cadde-1', 8, 13),
+    ('iskele', 'cadde-1', 0, 7),
+    ('iskele', 'restoran', 6, 14),
+    ('restoran', 'iskele', 7, 0),
+    ('restoran', 'ciftlik', 15, 7),
+    ('ciftlik', 'restoran', 0, 6),
+    ('ciftlik', 'maden', 8, 13),
+    ('maden', 'ciftlik', 6, 0)
+    ) as t(frm, dst, gx, gy)
+    where frm = p_from and dst = p_to and greatest(abs(gx - p_x), abs(gy - p_y)) <= 6) $$;
+
+create or replace function public.enter_room(p_slug text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; r public.rooms;
+begin
+  me := public._me();
+  select * into r from public.rooms where slug = p_slug;
+  if not found then raise exception 'Oda bulunamadı.'; end if;
+  if r.owner_id is null then
+    if public.role_rank(me.role) < public.role_rank(r.min_role) then raise exception 'Bu odaya erişimin yok.'; end if;
+    -- Kapıdan yürümeden başka sabit odaya ışınlanma yok (admin, kişisel odadan çıkış ve oyun odaları hariç)
+    if me.role <> 'admin' and not (me.pos_room = 'oyunika' and p_slug in ('parti-oyunu', 'hain-avi', 'tetris-arena'))
+       and me.pos_room is not null and me.pos_room is distinct from p_slug
+       and me.pos_room not like 'home-%' and me.pos_room not in ('oyunika', 'parti-oyunu', 'hain-avi', 'tetris-arena')
+       and me.pos_at is not null and me.pos_at > now() - interval '5 minutes'
+       and not public._portal_ok(me.pos_room, p_slug, me.pos_x, me.pos_y) then
+      raise exception 'Bu odaya kapıdan yürüyerek gitmelisin.';
+    end if;
+    perform public._progress(me.id, 'room_3', 1);
+    return;
+  end if;
+  perform public._progress(me.id, 'room_3', 1);
+  if r.owner_id = me.id or me.role = 'admin' or r.access = 'open' then return; end if;
+  if r.access = 'friends' and exists (
+       select 1 from public.friendships f where f.status = 'accepted'
+         and ((f.requester = me.id and f.addressee = r.owner_id) or (f.requester = r.owner_id and f.addressee = me.id))
+     ) then return; end if;
+  raise exception 'Bu oda sadece sahibinin %.', case when r.access = 'friends' then 'arkadaşlarına açık' else 'kendisine açık' end;
+end $$;
+
+create or replace function public.send_chat(p_room text, p_text text, p_target text default null) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; r public.rooms; t public.profiles; txt text;
+begin
+  me := public._me();
+  if me.kicked_until is not null and me.kicked_until > now() then raise exception 'Hesabın uzaklaştırıldı.'; end if;
+  if me.muted_until is not null and me.muted_until > now() then raise exception 'Susturuldun, şu an mesaj yazamazsın.'; end if;
+  txt := btrim(regexp_replace(coalesce(p_text, ''), '[[:cntrl:]]', '', 'g'));
+  if char_length(txt) < 1 or char_length(txt) > 140 then raise exception 'Mesaj 1-140 karakter olmalı.'; end if;
+
+  if me.role <> 'admin' then
+    if exists (select 1 from public.messages where sender_id = me.id and created_at > now() - interval '1 second') then
+      raise exception 'Çok hızlı yazıyorsun, biraz bekle.';
+    end if;
+    if (select count(*) from public.messages where sender_id = me.id and created_at > now() - interval '10 seconds') >= 6 then
+      raise exception 'Çok fazla mesaj gönderdin, birkaç saniye bekle.';
+    end if;
+    if exists (select 1 from public.messages where sender_id = me.id and text = txt and created_at > now() - interval '15 seconds') then
+      raise exception 'Aynı mesajı tekrar tekrar gönderemezsin (spam).';
+    end if;
+  end if;
+  txt := public._clean_chat(txt, me.role);
+
+  if p_target is null then
+    select * into r from public.rooms where slug = p_room;
+    if not found then raise exception 'Oda bulunamadı.'; end if;
+    insert into public.messages (kind, room, sender_id, sender, text) values ('chat', p_room, me.id, me.username, txt);
+    perform public._progress(me.id, 'chat_5', 1);
+  else
+    if public.role_rank(me.role) < 1 then raise exception 'Özel mesaj (/pm) sadece VIP ve üstü içindir.'; end if;
+    t := public._find_user(p_target);
+    if t.id = me.id then raise exception 'Kendine fısıldayamazsın.'; end if;
+    if public._is_blocked(me.id, t.id) then raise exception 'Bu oyuncuya mesaj gönderemezsin.'; end if;
+    insert into public.messages (kind, room, sender_id, sender, target_id, target, text)
+    values ('whisper', null, me.id, me.username, t.id, t.username, txt);
+  end if;
+
+  if random() < 0.02 then delete from public.messages where created_at < now() - interval '3 days'; end if;
+end $$;
+
+create or replace function public.friend_request(p_username text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles; f public.friendships;
+begin
+  me := public._me();
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendini arkadaş ekleyemezsin.'; end if;
+  if public._is_blocked(me.id, t.id) then raise exception 'Bu oyuncuya istek gönderemezsin.'; end if;
+  select * into f from public.friendships
+   where (requester = me.id and addressee = t.id) or (requester = t.id and addressee = me.id);
+  if found then
+    if f.status = 'accepted' then raise exception 'Zaten arkadaşsınız.'; end if;
+    if f.requester = me.id then raise exception 'İstek zaten gönderildi.'; end if;
+    update public.friendships set status = 'accepted' where requester = t.id and addressee = me.id;
+    perform public._emit_user_event(t.id, 'friend_accepted', jsonb_build_object('from', me.username));
+    return;
+  end if;
+  insert into public.friendships (requester, addressee) values (me.id, t.id);
+  perform public._emit_user_event(t.id, 'friend_request', jsonb_build_object('from', me.username));
+end $$;
+
+-- Şikâyet: aynı kişiye tekrar şikâyeti ve günlük şikâyet sayısını sınırla
+create or replace function public.report_player(p_username text, p_reason text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles; ctx jsonb;
+begin
+  me := public._me();
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendini şikayet edemezsin.'; end if;
+  if btrim(coalesce(p_reason, '')) = '' then raise exception 'Şikayet nedeni seç.'; end if;
+  if exists (select 1 from public.reports where reporter = me.username and created_at > now() - interval '1 minute') then
+    raise exception 'Çok sık şikayet ediyorsun, biraz bekle.';
+  end if;
+  if (select count(*) from public.reports where reporter = me.username and created_at > now() - interval '1 day') >= 15 then
+    raise exception 'Günlük şikayet sınırına ulaştın.';
+  end if;
+  if exists (select 1 from public.reports where reporter = me.username and target = t.username and status = 'open') then
+    raise exception 'Bu oyuncuyu zaten şikayet ettin, inceleniyor.';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('text', m.text, 'at', m.created_at) order by m.created_at desc), '[]'::jsonb)
+    into ctx
+    from (select * from public.messages where sender_id = t.id and created_at > now() - interval '30 minutes'
+           order by created_at desc limit 8) m;
+  insert into public.reports (reporter, target, reason, room, context)
+  values (me.username, t.username, left(btrim(p_reason), 200), me.current_room, ctx);
+end $$;
+
+-- ---------- v23: Blok Rüzgârı (Tetris) skorları ve ödülleri ----------------
+create table if not exists public.tetris_scores (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  best_solo int not null default 0,
+  duel_wins int not null default 0,
+  day date,
+  day_earned int not null default 0,
+  last_at timestamptz
+);
+alter table public.tetris_scores enable row level security;
+
+create or replace function public.tetris_submit(p_mode text, p_score int, p_lines int, p_secs int) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  me public.profiles; t public.tetris_scores; prize int; room_left int; coins_new int; best int; mult int;
+begin
+  me := public._me();
+  if p_mode not in ('solo', 'duel') then raise exception 'Geçersiz mod.'; end if;
+  if p_secs is null or p_secs < 5 or p_secs > 7200 then raise exception 'Geçersiz süre.'; end if;
+  if p_score is null or p_score < 0 or p_score > p_secs * 300 then raise exception 'Geçersiz skor.'; end if;
+  if p_lines is null or p_lines < 0 or p_lines > p_secs * 0.9 + 4 then raise exception 'Geçersiz skor.'; end if;
+  perform 1 from public.profiles where id = me.id for update;
+  insert into public.tetris_scores (user_id) values (me.id) on conflict (user_id) do nothing;
+  select * into t from public.tetris_scores where user_id = me.id for update;
+  -- Önceki gönderimden bu yana oyun süresi kadar zaman geçmiş olmalı (hızlı tekrar yok)
+  if t.last_at is not null and extract(epoch from (now() - t.last_at)) < p_secs * 0.5 then
+    raise exception 'Çok hızlı! Biraz oyna, sonra tekrar dene.';
+  end if;
+  if t.day is distinct from current_date then t.day := current_date; t.day_earned := 0; end if;
+  prize := case when p_mode = 'solo' then (p_score / 1000) * 25 else 200 end;
+  room_left := greatest(0, 800 - t.day_earned);
+  prize := least(prize, room_left);
+  t.day_earned := t.day_earned + prize;
+  mult := public._event_mult();
+  best := t.best_solo;
+  if p_mode = 'solo' then best := greatest(best, p_score); end if;
+  update public.tetris_scores
+     set best_solo = best,
+         duel_wins = duel_wins + case when p_mode = 'duel' then 1 else 0 end,
+         day = t.day, day_earned = t.day_earned, last_at = now()
+   where user_id = me.id;
+  update public.profiles set coins = coins + prize * mult where id = me.id returning coins into coins_new;
+  return jsonb_build_object('prize', prize * mult, 'coins', coins_new, 'best', best, 'capped', t.day_earned >= 800);
+end $$;
+
+create or replace function public.tetris_board() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare a jsonb; b jsonb;
+begin
+  perform public._me();
+  select coalesce(jsonb_agg(jsonb_build_object('username', x.username, 'score', x.best_solo)), '[]'::jsonb) into a
+    from (select p.username, s.best_solo from public.tetris_scores s join public.profiles p on p.id = s.user_id
+           where s.best_solo > 0 order by s.best_solo desc limit 10) x;
+  select coalesce(jsonb_agg(jsonb_build_object('username', x.username, 'wins', x.duel_wins)), '[]'::jsonb) into b
+    from (select p.username, s.duel_wins from public.tetris_scores s join public.profiles p on p.id = s.user_id
+           where s.duel_wins > 0 order by s.duel_wins desc limit 10) x;
+  return jsonb_build_object('solo', a, 'duel', b);
+end $$;
+
 -- Fonksiyon yetkileri: varsayılan "herkes çalıştırabilir"i kapat, sonra sadece gerekenlere aç.
 do $$
 declare r record;
@@ -2819,14 +3127,14 @@ begin
                          'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni',
                          'admin_set_role','admin_gift','admin_kick','admin_announce','admin_dance','admin_clear_room',
                          'send_chat','roll_dice','heartbeat','friend_request','friend_respond','friend_remove','get_friends',
-                         'gift_coins','gift_item','nudge_furni','_event_mult','active_events','claim_event_reward','admin_create_event','admin_end_event','wheel_status','spin_wheel','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
+                         'gift_coins','gift_item','nudge_furni','_streak_next','_streak_reward','_is_blocked','block_user','unblock_user','my_blocks','_clean_chat','_portal_ok','_event_mult','active_events','claim_event_reward','admin_create_event','admin_end_event','wheel_status','spin_wheel','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
                          'admin_start_quiz','answer_quiz','admin_mute','admin_unmute','admin_ban','admin_unban',
                          'report_player','admin_list_reports','admin_close_report','admin_get_log',
                          'fish_price','buy_fishing_rod','equip_tool','catch_fish','sell_fish',
                          '_level','_ach','_add_xp','_quest_goal','_quest_coins','_quest_xp','_progress','get_quests','claim_quest',
                          'get_profile_card','home_style_price','set_home_style','like_home','set_status','_inv_remove','market_list_item','market_get','market_cancel','market_buy',
                          '_tournament_add','_close_tournaments','get_tournament','admin_start_tournament',
-                         '_room_spawn','report_pos','_furni_w','_furni_h','_fw','_fh','_is_water','_check_place','_in_room','_require_near','goods_price','buy_pickaxe','mine_ore','sell_goods','_crop_seconds','_crop_seed','farm_get','farm_plant','farm_harvest','cook','_guild_level','guild_get','guild_list','guild_create','guild_join','guild_leave','guild_kick','guild_donate','dice_play','_bj_total','_bj_card','_bj_view','_bj_finish','bj_state','bj_start','bj_hit','bj_stand','_close_flags','admin_start_flag','flag_grab','get_flag','_close_hides','admin_start_hide','hide_tag','get_hide')
+                         '_room_spawn','report_pos','_furni_w','_furni_h','_fw','_fh','_is_water','_check_place','_in_room','_require_near','goods_price','buy_pickaxe','mine_ore','sell_goods','_crop_seconds','_crop_seed','farm_get','farm_plant','farm_harvest','cook','_guild_level','guild_get','guild_list','guild_create','guild_join','guild_leave','guild_kick','guild_donate','dice_play','_bj_total','_bj_card','_bj_view','_bj_finish','bj_state','bj_start','bj_hit','bj_stand','_close_flags','admin_start_flag','flag_grab','get_flag','_close_hides','admin_start_hide','hide_tag','get_hide','tetris_submit','tetris_board')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
   end loop;
@@ -2841,11 +3149,16 @@ grant execute on function public.claim_event_reward(uuid)                       
 grant execute on function public.admin_create_event(text, text, text, int, int, timestamptz, int) to authenticated;
 grant execute on function public.admin_end_event(uuid)                          to authenticated;
 grant execute on function public.spin_wheel()                                   to authenticated;
+grant execute on function public.tetris_submit(text, int, int, int)                to authenticated;
+grant execute on function public.tetris_board()                                    to authenticated;
 grant execute on function public.set_look(text, text, text)                     to authenticated;
 grant execute on function public.buy_and_place_furni(text, text, int, int, int) to authenticated;
 grant execute on function public.place_from_bag(text, text, int, int, int)      to authenticated;
 grant execute on function public.pickup_furni(text, text)                       to authenticated;
 grant execute on function public.nudge_furni(text, text, int, int, int, int, int)   to authenticated;
+grant execute on function public.block_user(text)                               to authenticated;
+grant execute on function public.unblock_user(text)                             to authenticated;
+grant execute on function public.my_blocks()                                    to authenticated;
 grant execute on function public.admin_set_role(text, text)                     to authenticated;
 grant execute on function public.admin_gift(text, int)                          to authenticated;
 grant execute on function public.admin_kick(text)                               to authenticated;

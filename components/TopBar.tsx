@@ -5,7 +5,7 @@ import type { ConnStatus } from "@/lib/network";
 import type { Profile } from "@/lib/types";
 import RoleBadge from "./RoleBadge";
 
-export type PanelKey = "bag" | "friends" | "shop" | "quests" | "badges" | "wheel" | "events" | "market" | "guild" | "admin";
+export type PanelKey = "bag" | "friends" | "shop" | "quests" | "badges" | "wheel" | "events" | "market" | "guild" | "admin" | "settings" | "daily";
 
 type ConnKey = "connected" | "connecting" | "demo" | "error";
 
@@ -183,6 +183,16 @@ export default function TopBar({
         </button>
 
         <button
+          onClick={() => onTogglePanel("settings")}
+          title="Ayarlar"
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+            panel === "settings" ? "bg-slate-200 text-slate-950 border-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+          }`}
+        >
+          ⚙️ <span className="hidden 2xl:inline">Ayarlar</span>
+        </button>
+
+        <button
           onClick={() => onTogglePanel("wheel")}
           title="Günlük Şans Çarkı"
           className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
@@ -222,14 +232,18 @@ export default function TopBar({
           <span className="text-[10px] bg-slate-700 px-1.5 rounded-full">{profile.inventory.length}</span>
         </button>
 
-        {profile.canClaimDaily && (
-          <button
-            onClick={onClaimDaily}
-            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-2.5 py-1 rounded-lg shadow animate-pulse"
-          >
-            🎁 <span className="hidden md:inline">+500</span>
-          </button>
-        )}
+        <button
+          onClick={() => onTogglePanel("daily")}
+          title="Günlük ödül ve giriş serisi"
+          className={`text-xs font-black px-2.5 py-1 rounded-lg shadow border ${
+            profile.canClaimDaily
+              ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 animate-pulse"
+              : "bg-slate-800 hover:bg-slate-700 text-orange-300 border-slate-700"
+          }`}
+        >
+          {profile.canClaimDaily ? "🎁" : "🔥"}{" "}
+          <span className="hidden md:inline">{profile.canClaimDaily ? `Gün ${profile.streakNext ?? 1}` : (profile.dailyStreak ?? 0)}</span>
+        </button>
 
         <div className="bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1 text-xs font-bold text-yellow-400">
           <span>🪙</span>

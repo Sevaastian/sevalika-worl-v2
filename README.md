@@ -268,3 +268,44 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Yeni yerleşim: Sörf standı, balıkçı kulübesi (iskele yanında), yemek aracı, dondurma büfesi, çiçeklikler, ek şezlonglar, banklar, fenerler. Voleybol sahası ve DJ pisti korundu.
 - Koddan çizilen dekor: havlular, deniz yıldızları, kabuklar, kum kalesi, ayak izleri, şamandıralar, süzülen yelkenli, iskele fenerleri, uçan martılar.
 - Oda boyutu ve su kuralı aynı (20x16). `supabase/schema.sql` yeniden çalıştırılmalı: odanın eşyaları sıfırlanır.
+
+## v20 — Güvenlik, moderasyon ve cila
+**Sunucu (supabase/schema.sql — yeniden çalıştırın):**
+- `send_chat`: 10 sn'de en fazla 6 mesaj, küfür maskeleme (`_clean_chat`), bağlantı (http/www/.com…) engeli, 6+ tekrar eden harf sıkıştırma. Admin muaf.
+- Oyuncu engelleme: `user_blocks`, `block_user`, `unblock_user`, `my_blocks`. Engelleme arkadaşlığı kaldırır; engelli kişiye /pm ve arkadaş isteği gidemez.
+- `report_player`: günlük 15 şikâyet, aynı kişiye açık şikâyet varken tekrar yok.
+- `enter_room`: sabit odalar arası geçişte sunucudaki son konum kapıya ≤6 kare olmalı (`_portal_ok`, portallar constants.ts'ten üretildi). Admin, kişisel odadan çıkış, Oyunika ve 5 dk'dan eski konum muaf. Yeni portal eklerseniz `_portal_ok` listesini güncelleyin.
+**İstemci:**
+- ⚙️ Ayarlar paneli: efekt/müzik aç-kapa + ses seviyesi, düşük kalite modu (parçacık, kuş, yönlü gölge kapalı), katmanlı karakter, engellenenler listesi, çıkış. Ayarlar tarayıcıda saklanır.
+- Oyuncu kartında 🚫 Engelle; engelli oyuncunun mesajları görünmez.
+- Yeni sesler (kapı, panel açma, bildirim) ve Sahil/Kış Köyü/AVM/Oyunika/Çiftlik/Maden/Emlak için oda müzikleri.
+
+## v21 — Giriş serisi ve ilk giriş rehberi
+- 7 günlük giriş serisi: ödüller 500/550/650/750/900/1100/2000 (`DAILY_REWARDS` ↔ SQL `_streak_reward`). 48 saatten uzun ara serisi sıfırlar; 7. günden sonra başa döner. Etkinlik çarpanı geçerli. Üst bardaki 🎁/🔥 butonu takvim panelini açar.
+- `schema.sql` yeniden çalıştırılmalı (profiles.daily_streak sütunu, claim_daily, get_my_profile).
+- İlk girişte 5 adımlı rehber (`components/Tour.tsx`); Ayarlar'dan tekrar açılır. Tamamlanma durumu tarayıcıda (`sw_tour_done`).
+
+## v22 — Oyunika Salonu, Parti Oyunu ve Hain Avı
+- **Cadde 1 → 🎮 Oyunika** kapısı (üst sokak, 20,0) artık bir mekâna açılıyor: içinde **Parti Lara** 🎉 ve **Komutan Demir** 🚀 NPC'leri var.
+- **Parti Oyunu** (eski Oyunika): mantık aynı (1-5 kişi, çift zar, kare efektleri). Parkur 59 kareye uzadı, yılan şeklinde 4 sıra; yeni kareler: ⚡ Hız Kuşağı (+5) ve ⏪ Geri Sar (−6). Lara'ya tıkla → lobi → başlat.
+- **Hain Avı** (Among Us tarzı; marka adı olduğu için bu isimle): 3-8 oyuncu, uzay gemisi haritası (28x18, 8 görev istasyonu, duvarlı odalar). Roller gizli dağıtılır, mürettebat görev yapar, hain ele (öldürme, 20 sn bekleme), ceset ihbarı / acil toplantı → tartışma → oylama → gönderme, kazanma kontrolleri, hayalet modu.
+- Yönetici test modu: Demir'de "Mürettebat/Hain olarak" ile 3 botla tek başına dene.
+- SQL: `supabase/schema.sql` yeniden çalıştırılmalı (3 oda satırı + `_portal_ok` + `enter_room` istisnaları).
+
+**Bilinen sınırlar:** oyun durumu istemci tabanlı (kurucu = host), roller devtools ile görülebilir; menzil/süre kontrolleri istemcide; kanal başına tek tur; host ayrılırsa tur iptal; toplantıda ışınlanma yok (sadece sohbet/oylama). Cadde 1 yerleşimi sıfırlanmaz (kapı/NPC'ler sabit).
+
+## v22 ek — Parti Oyunu büyük harita
+- Salon 31x27; 60 kareli parkur 6 sıra halinde kıvrılıyor, kareler arası bağlantı yolu var (oyuncular yoldan 2x hızla yürür).
+- **Liderlik kürsüsü** (altta): 1., 2., 3. bitiren otomatik kürsüye yürür; ilk 3 (veya oyuncu sayısı <3 ise hepsi) bitirince oyun biter. Bitirenler sıradan çıkar.
+- **Zar süresi:** sıra gelince 10 sn, etrafında yeşil→turuncu→kırmızı dönen halka; süre dolunca otomatik atılır (oyuncu yoksa kurucu 3,5 sn sonra atar). Yürüyüş animasyonu süresi sayaca eklenmez.
+- SQL: `parti-oyunu` odası layout_v 13, portal (0,26) — schema.sql'i yeniden çalıştır.
+- **Kürsü modeli:** 1-2-3 blokları 3B izometrik çizilir (neon çizgili mor gövde, altın/gümüş/bronz kalın üst plaka, sıra numarası + yıldız); kazananlar bloğun üstüne çıkar (`Player.lift`).
+- **Hain Avı görüş alanı (sis):** oyun sırasında herkes yalnızca yakınını görür (mürettebat 5,5 kare, hain 7,5 kare), duvarlar görüşü keser; uzaktaki oyuncular ve cesetler çizilmez. Toplantıda ve hayaletken görüş sınırsız.
+
+## v23 — Blok Rüzgârı (Tetris) 🧱
+- Oyunika'da 3. NPC **Oyuncu Ali** → "Arenaya Gir" → **Blok Rüzgârı Arenası** odası (portal geri: Oyunika).
+- **Tek kişilik:** klasik oyun (7'li torba, hayalet blok, tut, kombo/back-to-back, seviye hızlanması). Her 1.000 puana 25 Sanil, günlük en fazla 800.
+- **Düello (2-4 kişi):** kurucu başlatır, herkes aynı blok sırasını alır (ortak tohum), 2/3/4 satır silince rakibe çöp satır gider, son ayakta kalan kazanır (+200 Sanil). Rakip tahtaları canlı küçük önizleme; oyuna katılmayanlar izleyebilir.
+- Kontroller: ← → / ↑ X / Z / ↓ / Boşluk / C; telefonda ekran tuşları.
+- Sunucu: `tetris_scores` tablosu, `tetris_submit` (süre/skor/satır makullük kontrolü, gönderimler arası bekleme, günlük sınır) ve `tetris_board` (liderlik). schema.sql'i yeniden çalıştır.
+- Sınırlar: oyun istemcide oynanır; skor kontrolü sadece makullük sınırlarına bakar (hile tamamen engellenmez, günlük tavan zararı sınırlar). Düello galibini istemci bildirir. Düello ağ gecikmesi gerçek kullanımda denenmeli. "Tetris" marka olduğu için oyun adı Blok Rüzgârı.

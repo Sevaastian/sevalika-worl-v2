@@ -1,3 +1,4 @@
+import { HAIN_COLS, HAIN_ROWS, HAIN_SPAWN, HAIN_FURNI, HAIN_WALLS } from "./hain";
 import type { FurniItem, FurniType, NpcKind, OyunikaCell, OyunikaCellKind, RoomDef, RoomTheme, UserRole } from "./types";
 
 export const BASE_TILE_W = 64;
@@ -164,58 +165,77 @@ export const MINE_COOLDOWN_MS = 2600;
 export const REPORT_POS_MS = 2500;
 export const FISH_COOLDOWN_MS = 2600;
 
-/** Oyunika: Sağa-sola kıvrılarak ilerleyen 37 karelik kutu oyunu parkuru */
-const RAW_OYUNIKA_PATH: [number, number, OyunikaCellKind][] = [
-  [1, 1, "start"],
-  [2, 1, "normal"],
-  [3, 1, "normal"],
-  [4, 1, "green"],
-  [5, 1, "normal"],
-  [6, 1, "purple"],
-  [7, 1, "normal"],
-  [8, 1, "red"],
-  [9, 1, "normal"],
-  [10, 1, "normal"],
-  [11, 1, "normal"],
-  [12, 1, "green"],
-  [12, 2, "normal"],
-  [12, 3, "normal"],
-  [11, 3, "purple"],
-  [10, 3, "normal"],
-  [9, 3, "normal"],
-  [8, 3, "red"],
-  [7, 3, "normal"],
-  [6, 3, "normal"],
-  [5, 3, "purple"],
-  [4, 3, "normal"],
-  [3, 3, "normal"],
-  [2, 3, "green"],
-  [2, 4, "normal"],
-  [2, 5, "normal"],
-  [3, 5, "purple"],
-  [4, 5, "normal"],
-  [5, 5, "red"],
-  [6, 5, "normal"],
-  [7, 5, "normal"],
-  [8, 5, "green"],
-  [9, 5, "normal"],
-  [10, 5, "purple"],
-  [11, 5, "red"],
-  [12, 5, "normal"],
-  [13, 5, "finish"],
+/**
+ * Parti Oyunu: 31x27'lik büyük salonda 6 sıra halinde kıvrılan, 60 numaralı kareden oluşan parkur.
+ * Kareler arası bağlantı yolu karoları (OYUNIKA_ROUTE) vardır; oyuncular zar sonrası bu yoldan yürür.
+ * Kare türleri: kırmızı (1 tur bekle), yeşil (ekstra zar), mor (±2-4 sürpriz),
+ * mavi (Hız Kuşağı: +5 ileri), turuncu (Geri Sar: -6).
+ */
+export const PARTI_COLS = 31;
+export const PARTI_ROWS = 27;
+export const PARTI_CELL_COUNT = 60;
+export const PARTI_PODIUM: { gx: number; gy: number }[] = [
+  { gx: 9, gy: 25 },
+  { gx: 7, gy: 25 },
+  { gx: 11, gy: 25 },
 ];
 
-export const OYUNIKA_TRACK: OyunikaCell[] = RAW_OYUNIKA_PATH.map(([gx, gy, kind], index) => ({
-  index,
-  gx,
-  gy,
-  kind,
-}));
+const buildPartiRoute = (): { gx: number; gy: number }[] => {
+  const route: { gx: number; gy: number }[] = [];
+  const rowsY = [2, 6, 10, 14, 18, 22];
+  const x0 = 2;
+  const x1 = 28;
+  rowsY.forEach((y, ri) => {
+    if (ri % 2 === 0) for (let x = x0; x <= x1; x++) route.push({ gx: x, gy: y });
+    else for (let x = x1; x >= x0; x--) route.push({ gx: x, gy: y });
+    if (ri < rowsY.length - 1) for (let k = 1; k <= 3; k++) route.push({ gx: ri % 2 === 0 ? x1 : x0, gy: y + k });
+  });
+  return route;
+};
+export const OYUNIKA_ROUTE = buildPartiRoute();
+const ROUTE_KEYS = new Set(OYUNIKA_ROUTE.map((t) => `${t.gx},${t.gy}`));
+export const isPartiRoute = (gx: number, gy: number) => ROUTE_KEYS.has(`${gx},${gy}`);
+
+const buildPartiTrack = (): OyunikaCell[] => {
+  const L = OYUNIKA_ROUTE.length;
+  const last = PARTI_CELL_COUNT - 1;
+  const out: OyunikaCell[] = [];
+  for (let i = 0; i < PARTI_CELL_COUNT; i++) {
+    const route = i === last ? L - 1 : Math.round((i * (L - 1)) / last);
+    let kind: OyunikaCellKind = "normal";
+    if (i === 0) kind = "start";
+    else if (i === last) kind = "finish";
+    else if (i > 1 && i < last - 1) {
+      if (i % 13 === 10) kind = "blue";
+      else if (i % 17 === 14) kind = "orange";
+      else if (i % 11 === 8) kind = "red";
+      else if (i % 9 === 4) kind = "green";
+      else if (i % 7 === 6) kind = "purple";
+    }
+    out.push({ index: i, gx: OYUNIKA_ROUTE[route].gx, gy: OYUNIKA_ROUTE[route].gy, kind, route });
+  }
+  return out;
+};
+
+export const OYUNIKA_TRACK: OyunikaCell[] = buildPartiTrack();
 
 export const oyunikaCellAt = (gx: number, gy: number): OyunikaCell | undefined =>
   OYUNIKA_TRACK.find((c) => c.gx === gx && c.gy === gy);
 
 const f = (id: string, type: FurniType, gx: number, gy: number, rot = 0): FurniItem => ({ id, type, gx, gy, rot, owner: null });
+
+const PARTI_FURNI: FurniItem[] = (() => {
+  const out: FurniItem[] = [];
+  let n = 1;
+  const kinds: FurniType[] = ["plant", "palm", "lamp", "bench", "plant", "palm"];
+  [4, 8, 12, 16, 20].forEach((y, ri) => {
+    for (let x = 5; x <= 25; x += 4) out.push(f(`pt${n++}`, kinds[(x / 4 + ri) % kinds.length | 0], x, y));
+  });
+  for (const x of [15, 19, 23, 27]) out.push(f(`pt${n++}`, x % 8 === 3 ? "lamp" : "plant", x, 26));
+  for (const y of [8, 14, 20]) out.push(f(`pt${n++}`, "lamp", 0, y));
+  out.push(f(`pt${n++}`, "palm", 29, 25), f(`pt${n++}`, "palm", 29, 0), f(`pt${n++}`, "lamp", 0, 0));
+  return out;
+})();
 
 export const ROOMS: RoomDef[] = [
   {
@@ -234,6 +254,7 @@ export const ROOMS: RoomDef[] = [
       { gx: 11, gy: 0, to: "avm", label: "🛍️ Sevalika AVM" },
       { gx: 6, gy: 21, to: "emlak-ofisi", label: "🏡 Emlak Ofisi" },
       { gx: 33, gy: 17, to: "kis-koyu", label: "❄️ Kış Köyü" },
+      { gx: 20, gy: 0, to: "oyunika", label: "🎮 Oyunika" },
     ],
     defaultFurni: [
       f("c1", "table", 3, 1),
@@ -650,27 +671,66 @@ export const ROOMS: RoomDef[] = [
   },
   {
     slug: "oyunika",
-    name: "🎲 Oyunika Parkuru",
+    name: "🎮 Oyunika",
     minRole: "user",
-    cols: 15,
-    rows: 8,
-    theme: { floorA: "#5a47a8", floorB: "#503f9a", wallLeft: "#7a5bd0", wallRight: "#6a4cc0", accent: "#f472b6" },
-    spawn: { gx: 1, gy: 1 },
-    portals: [{ gx: 0, gy: 7, to: "cadde-1", label: "Cadde 1'e Dön" }],
+    cols: 18,
+    rows: 12,
+    theme: { floorA: "#3b2d7a", floorB: "#2e2262", wallLeft: "#7a5bd0", wallRight: "#6a4cc0", accent: "#f472b6" },
+    spawn: { gx: 1, gy: 10 },
+    portals: [{ gx: 0, gy: 10, to: "cadde-1", label: "Cadde 1'e Dön" }],
     defaultFurni: [
-      f("oy1", "lamp", 0, 0),
-      f("oy2", "lamp", 14, 0),
-      f("oy3", "plant", 14, 6),
-      f("oy4", "palm", 3, 0),
-      f("oy5", "palm", 11, 0),
-      f("oy6", "lamp", 7, 0),
-      f("oy7", "plant", 2, 7),
-      f("oy8", "plant", 5, 7),
-      f("oy9", "plant", 9, 7),
-      f("oy10", "plant", 12, 7),
-      f("oy11", "bench", 7, 7),
-      f("oy12", "lamp", 14, 7),
+      f("oyk1", "rug", 4, 4), f("oyk2", "rug", 5, 4), f("oyk3", "rug", 6, 4),
+      f("oyk4", "rug", 12, 4), f("oyk5", "rug", 13, 4), f("oyk6", "rug", 14, 4),
+      f("oyk7", "tv", 2, 0), f("oyk8", "tv", 4, 0), f("oyk9", "tv", 6, 0),
+      f("oyk10", "tv", 11, 0), f("oyk11", "tv", 13, 0), f("oyk12", "tv", 15, 0),
+      f("oyk13", "lamp", 0, 0), f("oyk14", "lamp", 17, 0), f("oyk15", "lamp", 9, 0),
+      f("oyk16", "plant", 2, 5), f("oyk17", "plant", 8, 5), f("oyk18", "plant", 10, 5), f("oyk19", "plant", 16, 5),
+      f("oyk20", "bench", 5, 7), f("oyk21", "bench", 13, 7),
+      f("oyk22", "sofa", 8, 8), f("oyk23", "sofa", 10, 8),
+      f("oyk24", "table", 9, 8),
+      f("oyk25", "palm", 17, 11), f("oyk26", "palm", 17, 7), f("oyk27", "lamp", 0, 6),
+      f("oyk28", "plant", 3, 11), f("oyk29", "plant", 14, 11),
     ],
+  },
+  {
+    slug: "parti-oyunu",
+    name: "🎉 Parti Oyunu",
+    minRole: "user",
+    cols: PARTI_COLS,
+    rows: PARTI_ROWS,
+    theme: { floorA: "#5a47a8", floorB: "#503f9a", wallLeft: "#7a5bd0", wallRight: "#6a4cc0", accent: "#f472b6" },
+    spawn: { gx: 2, gy: 2 },
+    portals: [{ gx: 0, gy: 26, to: "oyunika", label: "Oyunika'ya Dön" }],
+    defaultFurni: PARTI_FURNI,
+  },
+  {
+    slug: "tetris-arena",
+    name: "🧱 Blok Rüzgârı Arenası",
+    minRole: "user",
+    cols: 20,
+    rows: 14,
+    theme: { floorA: "#4c3a9c", floorB: "#43338f", wallLeft: "#6d28d9", wallRight: "#5b21b6", accent: "#22d3ee" },
+    spawn: { gx: 2, gy: 11 },
+    portals: [{ gx: 0, gy: 13, to: "oyunika", label: "Oyunika'ya Dön" }],
+    defaultFurni: [
+      f("tt1", "lamp", 0, 0), f("tt2", "lamp", 19, 0), f("tt3", "lamp", 19, 13), f("tt4", "lamp", 0, 6),
+      f("tt5", "sofa", 5, 4), f("tt6", "sofa", 9, 4), f("tt7", "sofa", 13, 4),
+      f("tt8", "table", 7, 8), f("tt9", "table", 12, 8),
+      f("tt10", "plant", 3, 0), f("tt11", "plant", 8, 0), f("tt12", "plant", 12, 0), f("tt13", "plant", 16, 0),
+      f("tt14", "palm", 17, 11), f("tt15", "palm", 17, 6), f("tt16", "plant", 3, 13), f("tt17", "plant", 10, 13), f("tt18", "plant", 15, 13),
+      f("tt19", "bench", 5, 11), f("tt20", "bench", 9, 11),
+    ],
+  },
+  {
+    slug: "hain-avi",
+    name: "🚀 Hain Avı",
+    minRole: "user",
+    cols: HAIN_COLS,
+    rows: HAIN_ROWS,
+    theme: { floorA: "#475569", floorB: "#3f4b5c", wallLeft: "#334155", wallRight: "#2b3648", accent: "#38bdf8" },
+    spawn: HAIN_SPAWN,
+    portals: [],
+    defaultFurni: HAIN_FURNI,
   },
   {
     slug: "vip-cati-kati",
@@ -912,8 +972,12 @@ export const ROOM_NPCS: Record<string, { kind: NpcKind; name: string; gx: number
     { kind: "furnisher", name: "Mobilyacı Kerem", gx: 24, gy: 4, shirt: "#f97316", hair: "#292524", skin: "#d99a6c" },
   ],
   "cadde-1": [
-    { kind: "oyunika", name: "Arena Görevlisi Mert", gx: 20, gy: 3, shirt: "#ec4899", hair: "#facc15", skin: "#fed7aa" },
     { kind: "guide", name: "Rehber Yağmur", gx: 18, gy: 11, shirt: "#facc15", hair: "#0f172a", skin: "#fed7aa" },
+  ],
+  oyunika: [
+    { kind: "lara", name: "Parti Lara", gx: 5, gy: 3, shirt: "#ec4899", hair: "#7c2d12", skin: "#fed7aa" },
+    { kind: "demir", name: "Komutan Demir", gx: 13, gy: 3, shirt: "#0ea5e9", hair: "#0f172a", skin: "#d99a6c" },
+    { kind: "ali", name: "Oyuncu Ali", gx: 9, gy: 3, shirt: "#7c3aed", hair: "#1c1917", skin: "#e0ac85" },
   ],
   "emlak-ofisi": [{ kind: "realtor", name: "Emlakçı Orhan", gx: 8, gy: 3, shirt: "#0f766e", hair: "#475569", skin: "#fdba74" }],
   iskele: [{ kind: "fisher", name: "Balıkçı Hasan", gx: 7, gy: 3, shirt: "#0e7490", hair: "#e2e8f0", skin: "#d99a6c" }],
@@ -1186,3 +1250,9 @@ export const EVENT_THEMES: { id: "none" | "confetti" | "fireworks" | "lanterns" 
   { id: "snow", label: "❄️ Kar" },
   { id: "none", label: "Süs yok" },
 ];
+
+/** 7 günlük giriş serisi ödülleri (schema.sql `_streak_reward` ile aynı olmalı) */
+export const DAILY_REWARDS = [500, 550, 650, 750, 900, 1100, 2000];
+
+/** Hain Avı: harita duvarları (hareketi engeller, istemcide çizilir) */
+export const ROOM_WALLS: Record<string, [number, number][]> = { "hain-avi": HAIN_WALLS };

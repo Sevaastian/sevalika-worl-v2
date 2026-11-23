@@ -30,6 +30,7 @@ import {
   isHomeSlug,
   resolveRoom,
   WHEEL_PRIZES,
+  DAILY_REWARDS,
 } from "./constants";
 import type {
   GameEvent,
@@ -77,6 +78,8 @@ export interface Backend {
   adminEndEvent(id: string): Promise<void>;
   wheelStatus(): Promise<{ ready: boolean; seconds: number }>;
   spinWheel(): Promise<{ index: number; prize: number; coins: number }>;
+  tetrisSubmit(mode: "solo" | "duel", score: number, lines: number, secs: number): Promise<{ prize: number; coins: number; best: number; capped: boolean }>;
+  tetrisBoard(): Promise<{ solo: { username: string; score: number }[]; duel: { username: string; wins: number }[] }>;
   setLook(look: ColorLook): Promise<void>;
 
   // Oda / eşya
@@ -170,6 +173,9 @@ export interface Backend {
   // Yarışma / şikayet
   answerQuiz(text: string): Promise<{ correct: boolean; reward?: number }>;
   reportPlayer(username: string, reason: string): Promise<void>;
+  blockUser(username: string): Promise<void>;
+  unblockUser(username: string): Promise<void>;
+  myBlocks(): Promise<string[]>;
 
   // Admin
   adminSetRole(username: string, role: UserRole): Promise<void>;
@@ -236,6 +242,8 @@ interface ProfileRow {
   pet: string | null;
   room: string | null;
   can_claim_daily: boolean;
+  daily_streak?: number;
+  streak_next?: number;
   kicked_until: string | null;
   muted_until: string | null;
 }
@@ -263,6 +271,8 @@ const mapProfile = (r: ProfileRow): Profile => ({
   pet: r.pet ?? null,
   room: r.room ?? null,
   canClaimDaily: r.can_claim_daily,
+  dailyStreak: r.daily_streak ?? 0,
+  streakNext: r.streak_next ?? 1,
   kickedUntil: r.kicked_until,
   mutedUntil: r.muted_until,
 });
@@ -366,6 +376,9 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
     },
     wheelStatus: () => rpc<{ ready: boolean; seconds: number }>("wheel_status"),
     spinWheel: () => rpc<{ index: number; prize: number; coins: number }>("spin_wheel"),
+    tetrisSubmit: (mode, score, lines, secs) =>
+      rpc<{ prize: number; coins: number; best: number; capped: boolean }>("tetris_submit", { p_mode: mode, p_score: Math.round(score), p_lines: Math.round(lines), p_secs: Math.round(secs) }),
+    tetrisBoard: () => rpc<{ solo: { username: string; score: number }[]; duel: { username: string; wins: number }[] }>("tetris_board"),
     async setLook(l) {
       await rpc("set_look", { p_shirt: l.shirtColor, p_hair: l.hairColor, p_skin: l.skinColor });
     },
@@ -525,6 +538,9 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
 
     answerQuiz: (text) => rpc("answer_quiz", { p_text: text }),
     reportPlayer: (u, reason) => rpc("report_player", { p_username: u, p_reason: reason }),
+    blockUser: (u) => rpc("block_user", { p_username: u }),
+    unblockUser: (u) => rpc("unblock_user", { p_username: u }),
+    myBlocks: () => rpc<string[]>("my_blocks"),
 
     adminSetRole: (u, role) => rpc("admin_set_role", { p_username: u, p_role: role }),
     adminGift: (u, n) => rpc("admin_gift", { p_username: u, p_amount: n }),
@@ -701,6 +717,8 @@ function createDemoBackend(): Backend {
   const badgeCount = new Map<string, number>();
   const badgeOwned: string[] = [];
   let wheelAt = 0;
+  const tetrisDemo = { day: "", earned: 0, best: 0, wins: 0 };
+  const demoBlocks = new Set<string>();
   const demoEvents: (GameEvent & { ended: boolean })[] = [];
   const demoClaims = new Set<string>();
   const evMult = () => {
@@ -824,6 +842,8 @@ function createDemoBackend(): Backend {
         inventory: ["suvari_ati"],
         tool: null,
         canClaimDaily: true,
+        dailyStreak: 0,
+        streakNext: 1,
         kickedUntil: null,
         mutedUntil: null,
       };
@@ -881,6 +901,30 @@ function createDemoBackend(): Backend {
       const left = Math.max(0, Math.ceil((wheelAt + 86400000 - Date.now()) / 1000));
       return { ready: left === 0, seconds: left };
     },
+    async tetrisSubmit(mode, score, lines, secs) {
+      const p = need();
+      if (secs < 5 || score > secs * 400 || lines > secs * 0.9 + 4) throw new Error("Geçersiz skor.");
+      const day = new Date().toISOString().slice(0, 10);
+      if (tetrisDemo.day !== day) {
+        tetrisDemo.day = day;
+        tetrisDemo.earned = 0;
+      }
+      let prize = mode === "solo" ? Math.floor(score / 1000) * 25 : 200;
+      prize = Math.min(prize, Math.max(0, 800 - tetrisDemo.earned));
+      prize = prize * evMult();
+      tetrisDemo.earned += prize;
+      p.coins += prize;
+      if (mode === "solo") tetrisDemo.best = Math.max(tetrisDemo.best, score);
+      else tetrisDemo.wins++;
+      return { prize, coins: p.coins, best: tetrisDemo.best, capped: tetrisDemo.earned >= 800 };
+    },
+    async tetrisBoard() {
+      const p = need();
+      return {
+        solo: [{ username: "Cemre", score: 14200 }, { username: "Kaan", score: 9800 }, ...(tetrisDemo.best ? [{ username: p.username, score: tetrisDemo.best }] : [])].sort((a, b) => b.score - a.score),
+        duel: [{ username: "Cemre", wins: 7 }, ...(tetrisDemo.wins ? [{ username: p.username, wins: tetrisDemo.wins }] : [])].sort((a, b) => b.wins - a.wins),
+      };
+    },
     async spinWheel() {
       const p = need();
       if (Date.now() - wheelAt < 86400000) throw new Error("Çarkı bugün zaten çevirdin.");
@@ -902,7 +946,9 @@ function createDemoBackend(): Backend {
     async claimDaily() {
       const p = need();
       if (!p.canClaimDaily) throw new Error("Günlük ödülü zaten aldın.");
-      p.coins += 500 * evMult();
+      p.coins += DAILY_REWARDS[(p.streakNext ?? 1) - 1] * evMult();
+      p.dailyStreak = p.streakNext ?? 1;
+      p.streakNext = (p.dailyStreak % 7) + 1;
       p.canClaimDaily = false;
       bump("login");
       return p.coins;
@@ -1265,6 +1311,17 @@ function createDemoBackend(): Backend {
       ach("quiz_win");
       emit("quiz_end", null, null, { winner: p.username, reward: quiz.reward, answer: text.trim() });
       return { correct: true, reward: quiz.reward };
+    },
+    async blockUser(username) {
+      need();
+      requireKnown(username);
+      demoBlocks.add(username);
+    },
+    async unblockUser(username) {
+      demoBlocks.delete(username);
+    },
+    async myBlocks() {
+      return [...demoBlocks];
     },
     async reportPlayer(username, reason) {
       const p = need();

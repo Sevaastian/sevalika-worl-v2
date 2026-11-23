@@ -1,6 +1,8 @@
 import { lighting, silhouette } from "./ambience";
+import { gfx } from "./settings";
 import { bodyLayers, drawLayer, hasLayeredTop, layersReady } from "./avatarLayers";
-import { FURNI_BY_TYPE, ROOM_ROCKS, canRideHorse, isWaterTile, oyunikaCellAt } from "./constants";
+import { FURNI_BY_TYPE, ROOM_ROCKS, ROOM_WALLS, canRideHorse, isWaterTile, oyunikaCellAt, isPartiRoute, PARTI_PODIUM } from "./constants";
+import { HAIN_ZONE_LABELS, hainZone } from "./hain";
 import { getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
 import type { FurniItem, NpcKind, Player, Portal, RoomTheme } from "./types";
@@ -404,7 +406,13 @@ function drawRoomWallDecor(ctx: Ctx, l: Layout, slug: string, time: number) {
       drawLeftWallSign(ctx, l, 3, 9, "🏡 EMLAK OFİSİ · HAYALİNDEKİ EV", "#0f766e", "#99f6e4", 80);
       break;
     case "oyunika":
-      drawRightWallSign(ctx, l, 3, 12, "🎲 OYUNİKA KUTU PARKURU", "#db2777", "#fde047", 82);
+      drawRightWallSign(ctx, l, 3, 14, "🎮 OYUNİKA · EĞLENCE SALONU", "#db2777", "#fde047", 82);
+      break;
+    case "parti-oyunu":
+      drawRightWallSign(ctx, l, 3, 12, "🎉 PARTİ OYUNU", "#db2777", "#fde047", 82);
+      break;
+    case "tetris-arena":
+      drawRightWallSign(ctx, l, 3, 12, "🧱 BLOK RÜZGÂRI ARENASI", "#6d28d9", "#67e8f9", 82);
       break;
     case "monako-kulup":
       drawRightWallSign(ctx, l, 4, 11, "🎰 MONAKO CASINO & LOUNGE", "#be123c", "#facc15", 82);
@@ -554,7 +562,29 @@ function drawRoomAtmosphere(ctx: Ctx, l: Layout, slug: string, time: number) {
     for(let gx=5;gx<=8;gx++){ const q=gridToScreen(gx,1,l); ctx.save(); ctx.strokeStyle="rgba(251, 191, 36, .7)"; ctx.lineWidth=2*l.scale; ctx.beginPath(); ctx.moveTo(q.sx-5*l.scale,q.sy-4*l.scale); ctx.lineTo(q.sx+5*l.scale,q.sy+1*l.scale); ctx.stroke(); ctx.restore(); }
   }
 
-  if (slug === "oyunika") {
+  if (slug === "hain-avi") {
+    ctx.save();
+    ctx.font = `bold ${Math.round(11 * l.scale)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(226,232,240,0.28)";
+    for (const z of HAIN_ZONE_LABELS) {
+      const q = gridToScreen(z.gx, z.gy, l);
+      ctx.fillText(z.name, q.sx, q.sy + l.tileH * 0.65);
+    }
+    ctx.restore();
+  }
+  if (slug === "parti-oyunu") {
+    const q = gridToScreen(9, 20.4, l);
+    ctx.save();
+    ctx.font = `900 ${Math.max(9, 11 * l.scale)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fde68a";
+    ctx.shadowColor = "#f59e0b";
+    ctx.shadowBlur = 10 * l.scale;
+    ctx.fillText("🏆 LİDERLİK KÜRSÜSÜ", q.sx, q.sy);
+    ctx.restore();
+  }
+  if (slug === "oyunika" || slug === "parti-oyunu" || slug === "tetris-arena") {
     // Parkur dışındaki alana neon yıldızlar ve sahne ışıkları.
     for(let i=0;i<12;i++){ const gx=(i*7)%l.cols, gy=(i*3+1)%l.rows; const q=gridToScreen(gx,gy,l); const pulse=.55+.45*Math.sin(time/250+i);
       ctx.save(); ctx.globalAlpha=pulse; const starColor=i%2?"#f0abfc":"#67e8f9"; ctx.fillStyle=starColor; ctx.shadowColor=starColor; ctx.shadowBlur=8*l.scale; ctx.beginPath(); ctx.arc(q.sx,q.sy,1.8*l.scale,0,Math.PI*2); ctx.fill(); ctx.restore(); }
@@ -869,7 +899,11 @@ function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): Tile
     case "maden":
       return { a: "#a49a8f", b: "#948a7f", kind: "stone", edge: "#4a3f3566" };
     case "oyunika":
+    case "parti-oyunu":
+    case "tetris-arena":
       return { a: "#5a47a8", b: "#4f3f98", kind: "plain", edge: "#c4b5fd44" };
+    case "hain-avi":
+      return { a: "#475569", b: "#3f4b5c", kind: "plain", edge: "#94a3b844" };
     default:
       if (slug.startsWith("home-")) return { a: theme.floorA, b: theme.floorB, kind: (theme.floorKind as TileKind | undefined) ?? "wood", edge: "#6b431f55" };
       return base;
@@ -1060,7 +1094,10 @@ function drawSlab(ctx: Ctx, l: Layout, slug: string, theme: RoomTheme) {
       case "monako-kulup": return ["#6b1a2c", "#521422"];
       case "vip-cati-kati": return ["#b9b2cf", "#9a92b8"];
       case "maden": return ["#6a5f55", "#524940"];
-      case "oyunika": return ["#3b2d7a", "#2e2262"];
+      case "oyunika":
+      case "parti-oyunu":
+      case "tetris-arena": return ["#3b2d7a", "#2e2262"];
+      case "hain-avi": return ["#334155", "#2b3648"];
       default: return ["#b98a50", "#9a7040"];
     }
   })();
@@ -1191,9 +1228,42 @@ export function drawRoom(
       tilePath(ctx, sx, sy, l);
       const isHover = hover?.gx === gx && hover?.gy === gy;
 
-      // Oyunika kıvrımlı kutu oyunu parkuru
-      if (slug === "oyunika") {
+      // Hain Avı: bölgelere göre renkli metal zemin
+      if (slug === "hain-avi") {
+        const z = hainZone(gx, gy);
+        ctx.fillStyle = z?.tint ?? "#334155";
+        ctx.fill();
+        if ((gx + gy) % 2) {
+          ctx.fillStyle = "rgba(255,255,255,0.06)";
+          ctx.fill();
+        }
+        if (isHover) {
+          ctx.fillStyle = "rgba(56,189,248,0.25)";
+          ctx.fill();
+        }
+        ctx.strokeStyle = "rgba(148,163,184,0.22)";
+        ctx.stroke();
+        continue;
+      }
+
+      // Parti Oyunu: kıvrımlı kutu oyunu parkuru
+      if (slug === "parti-oyunu") {
         const cell = oyunikaCellAt(gx, gy);
+        const pod = PARTI_PODIUM.findIndex((q) => q.gx === gx && q.gy === gy);
+        if (pod >= 0) {
+          ctx.fillStyle = "#24135c";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(244,114,182,0.5)";
+          ctx.stroke();
+          continue;
+        }
+        if (!cell && isPartiRoute(gx, gy)) {
+          ctx.fillStyle = "#7c6bc4";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(233,213,255,0.55)";
+          ctx.stroke();
+          continue;
+        }
         if (!cell) {
           ctx.fillStyle = (gx + gy) % 2 === 0 ? "#4a3a94" : "#43348a";
           ctx.fill();
@@ -1207,6 +1277,8 @@ export function drawRoom(
           red: { bg: "#dc2626", border: "#fca5a5", label: "⏸️" },
           green: { bg: "#16a34a", border: "#86efac", label: "🎲" },
           purple: { bg: "#9333ea", border: "#e9d5ff", label: "?" },
+          blue: { bg: "#0891b2", border: "#a5f3fc", label: "⚡" },
+          orange: { bg: "#ea580c", border: "#fed7aa", label: "⏪" },
           finish: { bg: "#eab308", border: "#fef08a", label: "🏁" },
         };
         const st = colors[cell.kind];
@@ -1468,7 +1540,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.imageSmoothingQuality = "high";
 
       // Yönlü silüet gölgesi: güneşin yönüne göre yatar (yuvarlak temas gölgesi yok)
-      if (lighting.shadowAlpha > 0.01 && spriteMeta.drawH <= 135) {
+      if (!gfx.low && lighting.shadowAlpha > 0.01 && spriteMeta.drawH <= 135) {
         const sil = silhouette(img as CanvasImageSource & { width: number; height: number });
         if (sil) {
           ctx.save();
@@ -3057,6 +3129,60 @@ function drawNpcOutfit(ctx: Ctx, kind: NpcKind, ay: number) {
     ctx.fillRect(-9, ay - 20, 18, 2);
     return;
   }
+  if (kind === "lara") {
+    // Parti şapkası, konfeti
+    ctx.fillStyle = "#f472b6";
+    ctx.beginPath();
+    ctx.moveTo(-8, ay - 47);
+    ctx.lineTo(0, ay - 66);
+    ctx.lineTo(8, ay - 47);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#fde047";
+    ctx.fillRect(-8, ay - 49, 16, 3);
+    ctx.beginPath();
+    ctx.arc(0, ay - 67, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    const cols = ["#38bdf8", "#facc15", "#34d399", "#f87171"];
+    cols.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(-14 + i * 9, ay - 52 - (i % 2) * 8, 2.5, 2.5);
+    });
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-9, ay - 22, 18, 2);
+    return;
+  }
+  if (kind === "ali") {
+    // Retro oyuncu: neon bandana ve düşen blok rozeti
+    ctx.fillStyle = "#7c3aed";
+    ctx.fillRect(-10.5, ay - 45, 21, 5);
+    ctx.fillStyle = "#22d3ee";
+    ctx.fillRect(-10.5, ay - 41, 21, 1.6);
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(10, ay - 44, 4, 8);
+    const bl = ["#22d3ee", "#facc15", "#a855f7", "#22c55e"];
+    bl.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(-8 + i * 4.4, ay - 28, 4, 4);
+    });
+    return;
+  }
+  if (kind === "demir") {
+    // Kaptan kasketi ve rozet
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.arc(0, ay - 46, 10.5, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-11, ay - 47, 22, 3);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(-4, ay - 52, 8, 4);
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(-9, ay - 30, 18, 2);
+    ctx.beginPath();
+    ctx.arc(5, ay - 25, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   if (kind === "oyunika") {
     ctx.fillStyle = "#db2777";
     ctx.beginPath();
@@ -3133,7 +3259,7 @@ function drawNpcOutfit(ctx: Ctx, kind: NpcKind, ay: number) {
 export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: number) {
   const { sx, sy } = gridToScreen(p.gx, p.gy, l);
   ctx.save();
-  ctx.translate(sx, sy + l.tileH / 2);
+  ctx.translate(sx, sy + l.tileH / 2 - (p.lift ?? 0) * l.scale);
   const s = Math.max(0.75, l.scale);
   ctx.scale(s, s);
 
@@ -3215,7 +3341,7 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
 
   ctx.font = "bold 11px sans-serif";
   ctx.fillStyle = nameColor;
-  const NPC_ICON: Record<NpcKind, string> = { fisher: "🎣 ", chef: "👨‍🍳 ", farmer: "🌾 ", miner: "⛏️ ", dealer: "🎰 ", oyunika: "🎲 ", stylist: "👗 ", barber: "✂️ ", accessory: "🎀 ", furnisher: "🛋️ ", costume: "🎭 ", realtor: "🏡 ", guide: "🧭 " };
+  const NPC_ICON: Record<NpcKind, string> = { fisher: "🎣 ", chef: "👨‍🍳 ", farmer: "🌾 ", miner: "⛏️ ", dealer: "🎰 ", oyunika: "🎲 ", stylist: "👗 ", barber: "✂️ ", accessory: "🎀 ", furnisher: "🛋️ ", costume: "🎭 ", realtor: "🏡 ", guide: "🧭 ", lara: "🎉 ", demir: "🚀 ", ali: "🕹️ " };
   const prefix = p.isNpc ? NPC_ICON[p.npcKind ?? "fisher"] : isStaff ? "⚔️ " : p.role === "vip" ? "💎 " : "";
   centerText(ctx, `${prefix}${p.name}`, 0, lying ? 4 : 16);
   if (p.status && !p.isNpc && !lying) {
@@ -3327,5 +3453,200 @@ export function drawPet(ctx: Ctx, id: string, gx: number, gy: number, l: Layout,
   ctx.beginPath();
   ctx.arc(9, -12.5 - hop, 1, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* Hain Avı: duvar, ceset ve görev işaretleri                          */
+/* ------------------------------------------------------------------ */
+
+export const roomWalls = (slug: string) => ROOM_WALLS[slug] ?? [];
+
+/** Alçak metal gövde duvarı (izometrik kutu) */
+export function drawHainWall(ctx: Ctx, gx: number, gy: number, l: Layout) {
+  const { sx, sy } = gridToScreen(gx, gy, l);
+  const hw = (l.tileW / 2);
+  const hh = l.tileH / 2;
+  const h = 34 * l.scale;
+  const top = sy;
+  ctx.save();
+  // sol yüz
+  ctx.fillStyle = "#1e293b";
+  ctx.beginPath();
+  ctx.moveTo(sx - hw, top + hh - h);
+  ctx.lineTo(sx, top + 2 * hh - h);
+  ctx.lineTo(sx, top + 2 * hh);
+  ctx.lineTo(sx - hw, top + hh);
+  ctx.closePath();
+  ctx.fill();
+  // sağ yüz
+  ctx.fillStyle = "#334155";
+  ctx.beginPath();
+  ctx.moveTo(sx + hw, top + hh - h);
+  ctx.lineTo(sx, top + 2 * hh - h);
+  ctx.lineTo(sx, top + 2 * hh);
+  ctx.lineTo(sx + hw, top + hh);
+  ctx.closePath();
+  ctx.fill();
+  // üst
+  ctx.fillStyle = "#64748b";
+  ctx.beginPath();
+  ctx.moveTo(sx, top - h);
+  ctx.lineTo(sx + hw, top + hh - h);
+  ctx.lineTo(sx, top + 2 * hh - h);
+  ctx.lineTo(sx - hw, top + hh - h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(15,23,42,0.6)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // ışık şeridi
+  ctx.fillStyle = "rgba(56,189,248,0.55)";
+  ctx.fillRect(sx - hw * 0.5, top + hh * 1.4 - h * 0.55, hw * 0.25, 2 * l.scale);
+  ctx.restore();
+}
+
+/** Elenmiş oyuncunun cesedi */
+export function drawHainBody(ctx: Ctx, gx: number, gy: number, color: string, name: string, l: Layout, time: number) {
+  const { sx, sy } = gridToScreen(gx, gy, l);
+  ctx.save();
+  ctx.translate(sx, sy + l.tileH / 2);
+  const s = Math.max(0.75, l.scale);
+  ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, -4, 13, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fed7aa";
+  ctx.beginPath();
+  ctx.arc(-11, -6, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ef4444";
+  ctx.beginPath();
+  ctx.ellipse(3, 0, 7, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // bone
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(6, -10, 12, 2.5);
+  ctx.beginPath();
+  ctx.arc(6, -9, 2.2, 0, Math.PI * 2);
+  ctx.arc(18, -9, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  const pulse = 0.6 + 0.4 * Math.sin(time / 260);
+  ctx.globalAlpha = pulse;
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fecaca";
+  ctx.fillText("☠ " + name, 0, -22);
+  ctx.restore();
+}
+
+/** Görev istasyonu işaretleri: yanıp sönen halka + ikon */
+export function drawHainMark(ctx: Ctx, gx: number, gy: number, icon: string, done: boolean, l: Layout, time: number) {
+  const { sx, sy } = gridToScreen(gx, gy, l);
+  ctx.save();
+  ctx.translate(sx, sy + l.tileH / 2);
+  const s = Math.max(0.75, l.scale);
+  ctx.scale(s, s);
+  const pulse = 0.5 + 0.5 * Math.sin(time / 300 + gx);
+  ctx.strokeStyle = done ? "rgba(74,222,128,0.8)" : `rgba(250,204,21,${0.5 + 0.5 * pulse})`;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 22, 11, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.font = "16px sans-serif";
+  ctx.textAlign = "center";
+  ctx.globalAlpha = done ? 0.55 : 1;
+  ctx.fillText(done ? "✅" : icon, 0, -14 - pulse * 3);
+  ctx.restore();
+}
+
+/** Parti Oyunu liderlik kürsüsü bloğu: neon çizgili mor gövde, madalya renkli üst plaka */
+export const PODIUM_K = 1.4;
+export const PODIUM_HEIGHTS = [46 * PODIUM_K, 32 * PODIUM_K, 22 * PODIUM_K];
+export function podiumLift(gx: number, gy: number): number {
+  for (let i = 0; i < PARTI_PODIUM.length; i++) {
+    const q = PARTI_PODIUM[i];
+    const dist = Math.hypot(gx - q.gx, gy - q.gy);
+    if (dist < 0.75) return PODIUM_HEIGHTS[i] * Math.min(1, (0.75 - dist) / 0.4);
+  }
+  return 0;
+}
+export function drawPodiumBlock(ctx: Ctx, gx: number, gy: number, place: number, l: Layout, time: number) {
+  const g0 = gridToScreen(gx, gy, l);
+  const sx = 0;
+  const sy = -l.tileH / 2;
+  const H = (PODIUM_HEIGHTS[place - 1] / PODIUM_K) * l.scale;
+  const hw = l.tileW / 2;
+  const hh = l.tileH / 2;
+  const slab = 5 * l.scale;
+  const topCol = ["#facc15", "#e2e8f0", "#c2773a"][place - 1];
+  const topDark = ["#ca8a04", "#94a3b8", "#8a4a1c"][place - 1];
+  const accent = ["#f0abfc", "#67e8f9", "#fdba74"][place - 1];
+  const slope = hh / hw;
+  const poly = (pts: [number, number][], fill: string, stroke?: string) => {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1.2 * l.scale;
+      ctx.stroke();
+    }
+  };
+  ctx.save();
+  ctx.translate(g0.sx, g0.sy + l.tileH / 2);
+  ctx.scale(PODIUM_K, PODIUM_K);
+  // Gövde: sol ve sağ yüz
+  const T = sy - H; // üst yüz tepe noktası
+  poly([[sx - hw, sy + hh], [sx, sy + l.tileH], [sx, T + l.tileH], [sx - hw, T + hh]], "#2f1a78", "#1b0f4a");
+  poly([[sx + hw, sy + hh], [sx, sy + l.tileH], [sx, T + l.tileH], [sx + hw, T + hh]], "#43258f", "#1b0f4a");
+  // Neon şeritler
+  const pulse = 0.65 + 0.35 * Math.sin(time / 380 + place);
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.strokeStyle = accent;
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 8 * l.scale;
+  ctx.lineWidth = 1.8 * l.scale;
+  for (const [yy, col] of [[slab + 4 * l.scale, accent], [H - 5 * l.scale, "#38bdf8"]] as [number, string][]) {
+    ctx.strokeStyle = col;
+    ctx.shadowColor = col;
+    ctx.beginPath();
+    ctx.moveTo(sx - hw + 3 * l.scale, T + hh + yy - 3 * l.scale * slope);
+    ctx.lineTo(sx - 1, T + l.tileH + yy);
+    ctx.lineTo(sx + hw - 3 * l.scale, T + hh + yy - 3 * l.scale * slope);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // Sol yüzeye sıra numarası (izometrik eğimle)
+  ctx.save();
+  ctx.translate(sx - hw / 2, T + hh + hh / 2 + H * 0.5);
+  ctx.transform(1, slope, 0, 1, 0, 0);
+  ctx.font = `900 ${Math.max(14, Math.min(H * 0.8, 24 * l.scale))}px "Courier New", monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = topCol;
+  ctx.shadowColor = topCol;
+  ctx.shadowBlur = 6 * l.scale;
+  ctx.fillText(String(place), 0, 0);
+  ctx.restore();
+  // Sağ yüze yıldız
+  ctx.save();
+  ctx.translate(sx + hw / 2, T + hh + hh / 2 + H * 0.5);
+  ctx.transform(1, -slope, 0, 1, 0, 0);
+  ctx.font = `${Math.max(9, 12 * l.scale)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = topCol;
+  ctx.fillText("★", 0, 0);
+  ctx.restore();
+  // Üst plaka (kalın madalya kapak)
+  poly([[sx - hw - 2, T + hh], [sx, T + l.tileH + 2], [sx, T + l.tileH + 2 + slab], [sx - hw - 2, T + hh + slab]], topDark, "#1b0f4a");
+  poly([[sx + hw + 2, T + hh], [sx, T + l.tileH + 2], [sx, T + l.tileH + 2 + slab], [sx + hw + 2, T + hh + slab]], topDark, "#1b0f4a");
+  poly([[sx, T - 2], [sx + hw + 2, T + hh], [sx, T + l.tileH + 2], [sx - hw - 2, T + hh]], topCol, "#1b0f4a");
+  poly([[sx, T + 3 * l.scale], [sx + hw - 5 * l.scale, T + hh], [sx, T + l.tileH - 3 * l.scale], [sx - hw + 5 * l.scale, T + hh]], "rgba(255,255,255,0.22)");
   ctx.restore();
 }

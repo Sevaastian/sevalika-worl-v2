@@ -303,6 +303,7 @@ export function PlayerCard(props: {
   onProfile: () => void;
   onTag?: () => void;
   onReport: (reason: string) => void;
+  onBlock?: () => void;
   onGift: (amount: number) => void;
   onRole: (role: UserRole) => void;
   onKick: () => void;
@@ -351,6 +352,11 @@ export function PlayerCard(props: {
         <button onClick={() => setSub(sub === "report" ? null : "report")} className={`${btn} bg-slate-800 text-slate-300 border-slate-700`}>
           🚩 Şikayet
         </button>
+        {props.onBlock && (
+          <button onClick={props.onBlock} className={`${btn} bg-slate-800 text-rose-300 border-slate-700`}>
+            🚫 Engelle
+          </button>
+        )}
       </div>
       {!props.canWhisper && <div className="text-[10px] text-slate-500">Özel mesaj (/pm) VIP ve üstü içindir.</div>}
 

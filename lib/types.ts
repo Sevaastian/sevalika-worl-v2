@@ -101,16 +101,27 @@ export interface Profile extends Look {
   /** Son bulunduğu oda (kaldığın yerden devam için) */
   room: string | null;
   canClaimDaily: boolean;
+  /** Tamamlanan seri günü (0 = seri yok) ve bugün alınacak ödülün gün numarası (1-7) */
+  dailyStreak?: number;
+  streakNext?: number;
   /** Rehber Yağmur hoş geldin hediyesi alındı mı */
   guideGift?: boolean;
   kickedUntil: string | null;
   mutedUntil: string | null;
 }
 
-export type NpcKind = "fisher" | "chef" | "farmer" | "miner" | "dealer" | "oyunika" | "stylist" | "barber" | "accessory" | "furnisher" | "costume" | "realtor" | "guide";
+export type NpcKind = "fisher" | "chef" | "farmer" | "miner" | "dealer" | "oyunika" | "stylist" | "barber" | "accessory" | "furnisher" | "costume" | "realtor" | "guide" | "lara" | "demir" | "ali";
 
 export interface Player extends Look {
   id: string;
+  /** Hain Avı: elenmiş (hayalet) oyuncu — yarı saydam çizilir */
+  ghost?: boolean;
+  /** Yürüme hızı çarpanı (Parti Oyunu zar yürüyüşü) */
+  speedMul?: number;
+  /** Kürsü gibi yüksek yüzeyde dururken yukarı kayma (px) */
+  lift?: number;
+  /** Hain Avı: bu istemcide hiç çizilmez (canlılardan gizlenen hayaletler) */
+  hidden?: boolean;
   /** Sunucudaki hesap kimliği (sohbet balonu eşleştirmesi için) */
   uid?: string;
   name: string;
@@ -370,17 +381,20 @@ export interface HideState {
   me_seeker?: boolean;
 }
 
-export type OyunikaCellKind = "start" | "normal" | "red" | "green" | "purple" | "finish";
+export type OyunikaCellKind = "start" | "normal" | "red" | "green" | "purple" | "blue" | "orange" | "finish";
 
 export interface OyunikaCell extends Tile {
   index: number;
   kind: OyunikaCellKind;
+  /** OYUNIKA_ROUTE içindeki karo sırası */
+  route: number;
 }
 
 export interface OyunikaPlayerState {
   username: string;
   pos: number;
   skipTurn: boolean;
+  finished?: boolean;
   shirtColor: string;
   hairColor: string;
   skinColor: string;
@@ -394,6 +408,10 @@ export interface OyunikaState {
   lastDice: [number, number] | null;
   lastEventText: string | null;
   winner: string | null;
+  /** Bitiş sırası (ilk 3 kürsüye çıkar) */
+  finishOrder: string[];
+  /** Sıradaki oyuncunun zar süresinin bittiği an (ms epoch) */
+  turnEndsAt: number;
 }
 
 export type EventTheme = "none" | "confetti" | "fireworks" | "lanterns" | "balloons" | "snow";

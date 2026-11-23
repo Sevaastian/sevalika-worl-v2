@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { OYUNIKA_TRACK } from "@/lib/constants";
 import type { OyunikaState } from "@/lib/types";
 
@@ -25,14 +26,14 @@ export function OyunikaLobbyModal({
   return (
     <div className="bg-slate-900/95 backdrop-blur border-2 border-pink-500/80 rounded-2xl p-4 w-80 shadow-2xl space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-black text-pink-300 uppercase tracking-wider">🎲 Oyunika Kutu Oyunu</span>
+        <span className="text-xs font-black text-pink-300 uppercase tracking-wider">🎉 Parti Oyunu · Lara</span>
         <button onClick={onClose} className="text-slate-400 hover:text-white text-xs px-1.5">
           ✕
         </button>
       </div>
 
       <p className="text-[11px] text-slate-300 leading-relaxed">
-        Arkadaşlarınla (maksimum <strong className="text-pink-300">5 kişi</strong>) kıvrımlı parkurda çift zar atarak yarış!
+        Arkadaşlarınla (maksimum <strong className="text-pink-300">5 kişi</strong>) 60 karelik dev parkurda çift zar atarak yarış! Zarı 10 saniyede atmazsan otomatik atılır. İlk 3 bitiren liderlik kürsüsüne çıkar!
       </p>
 
       <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 space-y-1.5 text-[10px]">
@@ -47,6 +48,12 @@ export function OyunikaLobbyModal({
         </div>
         <div className="flex items-center gap-2 text-purple-300">
           <span className="w-3.5 h-3.5 rounded bg-purple-600 inline-block" /> <span>Mor Kare: Rastgele ileri veya geri sürpriz!</span>
+        </div>
+        <div className="flex items-center gap-2 text-cyan-300">
+          <span className="w-3.5 h-3.5 rounded bg-cyan-600 inline-block" /> <span>Mavi Kare: Hız Kuşağı, 5 kare ileri!</span>
+        </div>
+        <div className="flex items-center gap-2 text-orange-300">
+          <span className="w-3.5 h-3.5 rounded bg-orange-600 inline-block" /> <span>Turuncu Kare: Geri Sar, 6 kare geri!</span>
         </div>
       </div>
 
@@ -105,6 +112,73 @@ export function OyunikaLobbyModal({
   );
 }
 
+const TURN_SECONDS = 10;
+
+/** Zar süresi: etrafında yeşil şeritle dönen yuvarlak sayaç */
+function TurnRing({
+  state,
+  mine,
+  rolling,
+  onRoll,
+  name,
+}: {
+  state: OyunikaState;
+  mine: boolean;
+  rolling: boolean;
+  onRoll: () => void;
+  name: string;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
+  }, []);
+  const left = state.turnEndsAt ? Math.max(0, Math.min(TURN_SECONDS, (state.turnEndsAt - now) / 1000)) : TURN_SECONDS;
+  const frac = left / TURN_SECONDS;
+  const R = 42;
+  const C = 2 * Math.PI * R;
+  const color = frac > 0.5 ? "#22c55e" : frac > 0.25 ? "#f59e0b" : "#ef4444";
+  const body = (
+    <div className="relative w-[104px] h-[104px] mx-auto">
+      <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
+        <circle cx="50" cy="50" r={R} fill="none" stroke="rgba(148,163,184,0.25)" strokeWidth="7" />
+        <circle
+          cx="50"
+          cy="50"
+          r={R}
+          fill="none"
+          stroke={color}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={C}
+          strokeDashoffset={C * (1 - frac)}
+          style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+        />
+      </svg>
+      <div className="absolute inset-[11px] rounded-full flex flex-col items-center justify-center bg-gradient-to-br from-pink-600 to-purple-700 text-white shadow-lg">
+        <span className="text-2xl leading-none">{rolling ? "🎲" : mine ? "🎲" : "⏳"}</span>
+        <span className="text-[11px] font-black mt-0.5">{rolling ? "Atılıyor" : `${Math.ceil(left)} sn`}</span>
+      </div>
+    </div>
+  );
+  if (mine) {
+    return (
+      <button disabled={rolling} onClick={onRoll} className={`block mx-auto ${rolling ? "opacity-70" : "hover:scale-105 transition-transform"}`} title="Zar at">
+        {body}
+        <div className="text-center text-[11px] font-black text-pink-200 mt-1">Sıra sende! Zar at</div>
+      </button>
+    );
+  }
+  return (
+    <div>
+      {body}
+      <div className="text-center text-[11px] font-bold text-slate-300 mt-1">
+        Sıra: <span className="text-pink-300">{name}</span>
+      </div>
+    </div>
+  );
+}
+
 export function OyunikaHud({
   state,
   myUsername,
@@ -127,9 +201,9 @@ export function OyunikaHud({
   return (
     <div className="bg-slate-900/95 backdrop-blur border-2 border-pink-500/80 rounded-2xl p-3.5 w-80 shadow-2xl space-y-2.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-black text-pink-300 uppercase tracking-wider">🎲 Oyunika Parkuru</span>
+        <span className="text-xs font-black text-pink-300 uppercase tracking-wider">🎉 Parti Oyunu</span>
         <button onClick={onLeaveRoom} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg">
-          Cadde 1&apos;e Dön
+          Oyunika&apos;ya Dön
         </button>
       </div>
 
@@ -161,7 +235,7 @@ export function OyunikaHud({
                 {pl.skipTurn && <span className="text-[10px] bg-red-600/80 text-white px-1.5 rounded">⏸️ Bekliyor</span>}
               </span>
               <span className="text-[11px] font-black text-pink-300 shrink-0">
-                {pl.pos}/{finishIdx}
+                {pl.finished ? ["🥇", "🥈", "🥉", "🏅"][Math.min(3, state.finishOrder.indexOf(pl.username))] : `${pl.pos}/${finishIdx}`}
               </span>
             </div>
           );
@@ -170,7 +244,14 @@ export function OyunikaHud({
 
       {state.status === "finished" ? (
         <div className="bg-yellow-500/20 border border-yellow-400 rounded-xl p-2.5 text-center space-y-2">
-          <div className="text-xs font-black text-yellow-300">🏆 Kazanan: {state.winner}!</div>
+          <div className="text-xs font-black text-yellow-300">🏆 Oyun bitti! Kürsü:</div>
+          <div className="space-y-0.5">
+            {state.finishOrder.slice(0, 3).map((n, i) => (
+              <div key={n} className="text-xs font-black text-white">
+                {["🥇 1.", "🥈 2.", "🥉 3."][i]} {n}
+              </div>
+            ))}
+          </div>
           <button onClick={onReset} className="w-full bg-pink-600 hover:bg-pink-500 text-white text-xs font-black py-2 rounded-xl">
             🔄 Yeni Tur Başlat
           </button>
@@ -179,18 +260,8 @@ export function OyunikaHud({
         <button onClick={onReset} className="w-full bg-pink-600 hover:bg-pink-500 text-white text-xs font-black py-2 rounded-xl">
           🎲 Tek Kişilik Test Oyunu Başlat
         </button>
-      ) : isMyTurn ? (
-        <button
-          disabled={rolling}
-          onClick={onRoll}
-          className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 disabled:opacity-50 text-white text-xs font-black py-2.5 rounded-xl shadow-lg animate-pulse"
-        >
-          {rolling ? "Zarlar Atılıyor..." : "🎲 Çift Zar At (2 - 12)"}
-        </button>
       ) : (
-        <div className="bg-slate-800/80 text-slate-300 text-xs font-bold py-2 rounded-xl text-center">
-          ⏳ Sıra: <span className="text-pink-300">{current?.username ?? "-"}</span>
-        </div>
+        <TurnRing state={state} mine={isMyTurn} rolling={rolling} onRoll={onRoll} name={current?.username ?? "-"} />
       )}
     </div>
   );
