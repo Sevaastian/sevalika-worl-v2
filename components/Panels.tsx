@@ -233,15 +233,15 @@ export function BagPanel(props: { inventory: string[]; riding: boolean; tool: st
 
 export function BuildPanel(props: {
   isAdmin: boolean;
-  tool: "place" | "remove" | "nudge";
+  tool: "place" | "remove" | "nudge" | "rotate";
   selected: FurniType;
-  onTool: (t: "place" | "remove" | "nudge") => void;
+  onTool: (t: "place" | "remove" | "nudge" | "rotate") => void;
   onSelect: (t: FurniType) => void;
   onRotate: () => void;
 }) {
   return (
     <div className="bg-slate-900/95 backdrop-blur border border-yellow-500/40 p-2.5 md:p-3 rounded-xl w-60 md:w-64 space-y-2 shadow-2xl">
-      <div className="grid grid-cols-3 gap-1 bg-slate-800 p-1 rounded-lg text-[11px] font-bold">
+      <div className="grid grid-cols-4 gap-1 bg-slate-800 p-1 rounded-lg text-[11px] font-bold">
         <button onClick={() => props.onTool("place")} className={`py-1 rounded ${props.tool === "place" ? "bg-yellow-400 text-slate-950" : "text-slate-300"}`}>
           ➕ Yerleştir
         </button>
@@ -250,6 +250,9 @@ export function BuildPanel(props: {
         </button>
         <button onClick={() => props.onTool("nudge")} className={`py-1 rounded ${props.tool === "nudge" ? "bg-sky-400 text-slate-950" : "text-slate-300"}`}>
           ✋ Hizala
+        </button>
+        <button onClick={() => props.onTool("rotate")} className={`py-1 rounded ${props.tool === "rotate" ? "bg-emerald-400 text-slate-950" : "text-slate-300"}`}>
+          ↻ Çevir
         </button>
       </div>
 
@@ -283,6 +286,10 @@ export function BuildPanel(props: {
           <div><b className="text-sky-300">Serbest yerleştirme:</b> eşyayı tutup istediğin noktaya sürükle. Bırakınca en yakın kareye oturur, içinden geçilmez.</div>
           <div>🖱️ Tekerlek veya <b>+ / −</b>: boyutu değiştir.</div>
           <div><b>0</b> tuşu: konumu ve boyutu sıfırla.</div>
+        </div>
+      ) : props.tool === "rotate" ? (
+        <div className="text-[11px] text-slate-300 leading-relaxed">
+          <b className="text-emerald-300">Yerinde çevir:</b> eşyaya tıkla, yönü değişir (çantaya almana gerek yok). Çok kareli eşyalarda döndürmek için boş yer gerekir.
         </div>
       ) : (
         <div className="text-[11px] text-slate-400 leading-relaxed">Kaldırmak istediğin eşyaya tıkla. Eşya çantana gelir. Sadece kendi koyduğun eşyaları kaldırabilirsin (admin hepsini).</div>

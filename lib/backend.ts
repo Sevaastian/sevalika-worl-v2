@@ -86,6 +86,7 @@ export interface Backend {
   buyAndPlace(room: string, type: FurniType, gx: number, gy: number, rot: number): Promise<number>;
   placeFromBag(room: string, type: FurniType, gx: number, gy: number, rot: number): Promise<string[]>;
   pickup(room: string, id: string): Promise<string[]>;
+  rotateFurni(room: string, id: string): Promise<number>;
   nudgeFurni(room: string, id: string, ox: number, oy: number, sc: number, gx?: number, gy?: number): Promise<void>;
   loadRoom(slug: string): Promise<FurniItem[]>;
   enterRoom(slug: string): Promise<void>;
@@ -395,6 +396,7 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
       const r = await rpc<{ inventory: string[] }>("pickup_furni", { p_room: room, p_id: id });
       return r.inventory;
     },
+    rotateFurni: (room, id) => rpc<number>("rotate_furni", { p_room: room, p_id: id }),
     async nudgeFurni(room, id, ox, oy, sc, gx, gy) {
       await rpc("nudge_furni", { p_room: room, p_id: id, p_ox: Math.round(ox), p_oy: Math.round(oy), p_sc: Math.round(sc), p_gx: gx ?? null, p_gy: gy ?? null });
     },
@@ -992,6 +994,21 @@ function createDemoBackend(): Backend {
       room(slug).push({ id: uid(), type, gx, gy, rot, owner: p.username });
       pushRoom(slug);
       return [...p.inventory];
+    },
+    async rotateFurni(slug, id) {
+      const p = need();
+      const list = room(slug);
+      const item = list.find((f) => f.id === id);
+      if (!item) throw new Error("Eşya bulunamadı.");
+      if (p.role !== "admin" && slug !== homeSlug(p.username) && item.owner !== p.username) throw new Error("Bu eşya sana ait değil.");
+      const next = item.rot === 1 ? 0 : 1;
+      const r = resolveRoom(slug);
+      const n = fp(item.type, next);
+      if (r && (item.gx + n.w > (r.cols ?? 99) || item.gy + n.h > (r.rows ?? 99))) throw new Error("Döndürmek için yer yok.");
+      if (!tileFree(list.filter((f) => f.id !== id), item.type, item.gx, item.gy, next)) throw new Error("Döndürmek için yer yok.");
+      item.rot = next;
+      pushRoom(slug);
+      return next;
     },
     async nudgeFurni(slug, id, ox, oy, sc, gx, gy) {
       const p = need();

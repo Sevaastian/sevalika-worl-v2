@@ -176,7 +176,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   const [showChat, setShowChat] = useState(true);
   const [buildMode, setBuildMode] = useState(false);
   const [nudgeSel, setNudgeSel] = useState<string | null>(null);
-  const [buildTool, setBuildTool] = useState<"place" | "remove" | "nudge">("place");
+  const [buildTool, setBuildTool] = useState<"place" | "remove" | "nudge" | "rotate">("place");
   const [selectedFurni, setSelectedFurni] = useState<FurniType>("sofa");
   const [rotation, setRotation] = useState(0);
   const [selected, setSelected] = useState<{ name: string; role: UserRole } | null>(null);
@@ -1499,7 +1499,11 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       if (engine.isWaterTile(tile)) return notify("Denize eşya konamaz.");
       if (room.portals.some((p) => p.gx === tile.gx && p.gy === tile.gy)) return notify("Kapı karesine eşya konamaz.");
       await act(async () => {
-        if (buildTool === "remove") {
+        if (buildTool === "rotate") {
+          const item = engine.furniAt(tile, false) ?? engine.furniAt(tile, true);
+          if (!item) return notify("Döndürmek için bir eşyaya tıkla.");
+          await backend.rotateFurni(slug, item.id);
+        } else if (buildTool === "remove") {
           const item = engine.furniAt(tile, false) ?? engine.furniAt(tile, true);
           if (!item) return;
           updateProfile({ inventory: await backend.pickup(slug, item.id) });

@@ -513,6 +513,30 @@ begin
    where slug = p_room;
 end $$;
 
+-- v25: Eşyayı kaldırmadan yerinde döndür (sahibi/admin); yeni kaplanan kareler doğrulanır
+create or replace function public.rotate_furni(p_room text, p_id text) returns int
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; r public.rooms; item jsonb; new_rot int; rest jsonb;
+begin
+  me := public._me();
+  select * into r from public.rooms where slug = p_room for update;
+  if not found then raise exception 'Oda bulunamadı.'; end if;
+  select f into item from jsonb_array_elements(r.furni) f where f->>'id' = p_id;
+  if item is null then raise exception 'Eşya bulunamadı.'; end if;
+  if me.role <> 'admin' and r.owner_id is distinct from me.id and (item->>'owner') is distinct from me.id::text then
+    raise exception 'Bu eşya sana ait değil.';
+  end if;
+  new_rot := case when coalesce((item->>'rot')::int, 0) = 1 then 0 else 1 end;
+  select coalesce(jsonb_agg(f), '[]'::jsonb) into rest from jsonb_array_elements(r.furni) f where f->>'id' <> p_id;
+  perform public._check_place(p_room, rest, item->>'type', (item->>'gx')::int, (item->>'gy')::int, new_rot);
+  update public.rooms
+     set furni = (select coalesce(jsonb_agg(case when f->>'id' = p_id then f || jsonb_build_object('rot', new_rot) else f end), '[]'::jsonb)
+                  from jsonb_array_elements(furni) f),
+         updated_at = now()
+   where slug = p_room;
+  return new_rot;
+end $$;
+
 -- v19: Etkinlik sistemi (admin zamanlı etkinlik: Sanil çarpanı, tema, ödül, rozet)
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
@@ -3124,7 +3148,7 @@ begin
      where n.nspname = 'public'
        and p.proname in ('role_rank','furni_price','cosmetic_price','_me','_require_admin','_emit_event','_emit_user_event',
                          '_log','_norm','_find_user','_tile_free','handle_new_user','username_available','get_my_profile',
-                         'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni',
+                         'claim_daily','set_look','buy_and_place_furni','place_from_bag','pickup_furni','rotate_furni',
                          'admin_set_role','admin_gift','admin_kick','admin_announce','admin_dance','admin_clear_room',
                          'send_chat','roll_dice','heartbeat','friend_request','friend_respond','friend_remove','get_friends',
                          'gift_coins','gift_item','nudge_furni','_streak_next','_streak_reward','_is_blocked','block_user','unblock_user','my_blocks','_clean_chat','_portal_ok','_event_mult','active_events','claim_event_reward','admin_create_event','admin_end_event','wheel_status','spin_wheel','buy_cosmetic','buy_bundle','popular_homes','_badge_tiers','_badge_reward','badge_price','_badge_add','_badge_grant','get_badges','buy_badge','home_price','buy_home','expand_home','claim_guide_gift','_bundle_items','equip_cosmetic','ensure_home','set_home_access','enter_room',
@@ -3155,6 +3179,7 @@ grant execute on function public.set_look(text, text, text)                     
 grant execute on function public.buy_and_place_furni(text, text, int, int, int) to authenticated;
 grant execute on function public.place_from_bag(text, text, int, int, int)      to authenticated;
 grant execute on function public.pickup_furni(text, text)                       to authenticated;
+grant execute on function public.rotate_furni(text, text)                       to authenticated;
 grant execute on function public.nudge_furni(text, text, int, int, int, int, int)   to authenticated;
 grant execute on function public.block_user(text)                               to authenticated;
 grant execute on function public.unblock_user(text)                             to authenticated;

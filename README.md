@@ -315,3 +315,8 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - **"Gazeteyi Elime Al":** karakter gazeteyi elinde taşır, herkes görür (`tool = newspaper`, `equip_tool` artık bunu da kabul eder; ücretsiz). Elde tutarken sol panelde "📰 Gazeteyi Oku" butonu çıkar.
 - SQL: `equip_tool` güncellendi → schema.sql'i yeniden çalıştır.
 - Meslek sistemi (Süvari, Rehber, Gazeteci, Yönetmen, Sanatçı…) için bu ilk adım: NPC + mesleğe özel eşya. Sonraki adım: profilde meslek seçimi, meslek rozeti/etiketi ve her mesleğe özel görevler.
+
+## v25 — Eşyayı yerinde çevir ↻
+- Düzenleme panelinde yeni **↻ Çevir** aracı: eşyaya tıkla, yönü değişir (çantaya alıp tekrar koymaya gerek yok).
+- Sunucu: `rotate_furni(oda, id)` — sahibi/admin; yeni kaplanan kareler sınır ve çakışma için doğrulanır (çok kareli eşyalarda yer yoksa reddeder). schema.sql'i yeniden çalıştır.
+- Demo modunda çok kareli eşya çakışma kontrolü sunucuyla aynı hale getirildi (dikdörtgen kesişim).
