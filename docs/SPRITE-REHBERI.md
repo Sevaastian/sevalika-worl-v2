@@ -45,3 +45,30 @@ car_red: { src: "/sprites/car_red.png", wTiles: 2, hTiles: 1, drawW: 96, drawH: 
 - Dosya adı örneği: `public/sprites/avatar/body_01.png`, `hair_07.png`, `top_03.png` ...
 
 **Telif notu:** Başka bir oyunun (ör. Habbo) sprite'larını ya da ekran/dosya dökümlerini kullanma. Hem telif hem hesap/yayın riski var. Kendi çizimin, kendi ürettiğin veya lisansı açıkça serbest olan (CC0 vb.) görselleri kullan.
+
+---
+
+## 3. v26 — Büyütme ve PNG'ye geçiş yol haritası
+
+**Ne değişti:** Dünya yakınlaştırması `lib/iso.ts` başında (`WORLD_ZOOM_LARGE=1.4`, `WORLD_ZOOM_LARGE_MOBILE=1.05`, `WORLD_ZOOM_SMALL=1.4`),
+karakter ek büyütmesi `CHAR_K=1.3`. Tek yerden ayarlanır; tüm kodla çizilen şeyler (cadde, zemin, bina, araç) `l.scale` ile birlikte büyür.
+Tıklama/isabet testleri aynı ölçeği kullanır.
+
+**Mevcut PNG durumu:** 48 eşya/araç/bina zaten PNG (`public/sprites`). Kodla çizilen kalan: `rug` (halı), zemin/duvar/yol karoları,
+at, NPC kıyafet detayları, gazete/olta, arka-yön (kuzey) araba görünümü, karakterin tamamı (katmanlı sprite var ama varsayılan değil).
+
+### Benden istenenler (öncelik sırasıyla)
+1. **Karakter katmanları** (en önemli): 192 x 288 px kare (karakter 1.3x büyüdüğü için eskisinden %50 büyük çiz), alt-orta = ayak.
+   Gri tonlamalı: `body`, `face`, `legs`, `shirt`, `hs_*` (saç, ön+arka `_b`), `top_*` (özel üstler). Eksik: ayakkabı (`shoe_*`),
+   şapka (`hat_*`), gözlük (`glasses_*`), sırt (`back_*`), 4 yön x (idle 2, walk 6, sit 1) sprite sheet.
+2. **Araçlar:** `car_red/blue/yellow` bugün tek yönlü; her biri için ikinci görsel (kuzey-batı yönü) `car_*_b.png`, 384x256 px, 2x1 taban.
+   Yeni araç türleri: otobüs (3x1), taksi, polis, kamyonet.
+3. **Zemin karoları (256x128, eşkenar dörtgen, dikişsiz):** `tile_stone`, `tile_wood`, `tile_grass`, `tile_road`, `tile_sand`, `tile_carpet`, `tile_snow`.
+4. **Duvarlar:** `wall_*` 256 x 460 (sol/sağ duvar için ayrı), pencere/kapı varyantları.
+5. **Eşya ayrıntısı:** `rug` (2x2, 512x256) ve ev eşyaları için 2. renk varyantları (`sofa_b`, `bed_b`, ...).
+6. **Hayvan/at:** `horse_idle`, `horse_walk` (6 kare) 192 x 192.
+
+### Kuralların özeti
+- Hepsi şeffaf PNG, izometrik 2:1, ışık sol-üstten, gölge yok (oyun ekliyor), 4x çalışma boyutu (1 kare = 256x128).
+- Dosya adları yukarıdaki gibi küçük harf + alt çizgi; ben `lib/sprites.ts` içine tanıtmayı yaparım (boyutlar doğruysa `drawW/drawH`'ı otomatik hesaplarım).
+- **Hepsini ben de üretebilirim:** kodla piksel-sanat (v8/v9'daki gibi) üretip PNG'ye dökebilirim; ama senin çizdirdiğin/lisanslı görseller her zaman daha özgün ve detaylı olur. Hangisini istediğini söylemen yeterli.

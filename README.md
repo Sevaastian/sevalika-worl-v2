@@ -320,3 +320,8 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Düzenleme panelinde yeni **↻ Çevir** aracı: eşyaya tıkla, yönü değişir (çantaya alıp tekrar koymaya gerek yok).
 - Sunucu: `rotate_furni(oda, id)` — sahibi/admin; yeni kaplanan kareler sınır ve çakışma için doğrulanır (çok kareli eşyalarda yer yoksa reddeder). schema.sql'i yeniden çalıştır.
 - Demo modunda çok kareli eşya çakışma kontrolü sunucuyla aynı hale getirildi (dikdörtgen kesişim).
+
+## v26 — Büyütme
+- Karakterler `CHAR_K=1.3` büyüdü; dünya yakınlaştırması 1.05 → 1.4 (mobil 0.85 → 1.05). Küçük odalar ekrana sığdığı kadar büyür.
+- Ayarlar `lib/iso.ts` başında. PNG yol haritası: `docs/SPRITE-REHBERI.md` bölüm 3.
+- Şema değişikliği yok; sadece yeniden deploy.

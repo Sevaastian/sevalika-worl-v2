@@ -10,6 +10,13 @@ export interface Layout {
   rows: number;
 }
 
+/** v26 yakınlaştırma ayarları */
+export const WORLD_ZOOM_LARGE = 1.4;
+export const WORLD_ZOOM_LARGE_MOBILE = 1.05;
+export const WORLD_ZOOM_SMALL = 1.4;
+/** Karakter, dünyaya göre ayrıca bu kadar büyük çizilir */
+export const CHAR_K = 1.3;
+
 export function getLayout(
   width: number,
   height: number,
@@ -20,14 +27,15 @@ export function getLayout(
 ): Layout {
   // Büyük haritalarda (cols > 14 veya rows > 14) karakteri yakından görebilmek için haritayı ekrana sıkıştırmıyoruz
   const isLarge = cols > 14 || rows > 14;
-  const fullGridWidth = cols * BASE_TILE_W;
+  const fullGridWidth = (cols + rows) * (BASE_TILE_W / 2);
+  const fullGridHeight = (cols + rows) * (BASE_TILE_H / 2) + 150;
+  // v26: dünya büyütüldü. Küçük odalar ekrana sığdığı kadar (en fazla ZOOM_MAX) büyür.
+  const fit = Math.min((width - 24) / fullGridWidth, (height - (width < 768 ? 260 : 190)) / fullGridHeight);
   const scale = isLarge
     ? width < 768
-      ? 0.85
-      : 1.05
-    : width < 768
-      ? Math.min(1, (width - 24) / fullGridWidth)
-      : 1;
+      ? WORLD_ZOOM_LARGE_MOBILE
+      : WORLD_ZOOM_LARGE
+    : Math.max(0.6, Math.min(width < 768 ? 1.15 : WORLD_ZOOM_SMALL, fit));
 
   const tileW = BASE_TILE_W * scale;
   const tileH = BASE_TILE_H * scale;

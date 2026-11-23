@@ -1,6 +1,6 @@
 import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile, PARTI_PODIUM } from "./constants";
 import { drawAvatar, drawBubble, drawFlag, drawFurni, drawHainBody, drawHainMark, drawHainWall, drawPet, drawPodiumBlock, podiumLift, drawRock, drawRoom, drawRug, roomRocks, roomWalls } from "./draw";
-import { getLayout, gridToScreen, inGrid, screenToGrid, type Layout } from "./iso";
+import { CHAR_K, WORLD_ZOOM_LARGE, WORLD_ZOOM_LARGE_MOBILE, getLayout, gridToScreen, inGrid, screenToGrid, type Layout } from "./iso";
 import { lighting, updateLighting } from "./ambience";
 import { gfx } from "./settings";
 import { findPath } from "./pathfinding";
@@ -185,7 +185,7 @@ export class GameEngine {
     const rect = this.canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const s = Math.max(0.75, this.layout.scale);
+    const s = Math.max(0.75, this.layout.scale) * CHAR_K;
     let best: Player | undefined;
     for (const p of this.players) {
       if (p.id === this.myId) continue;
@@ -559,7 +559,7 @@ export class GameEngine {
       return;
     }
 
-    const scale = this.width < 768 ? 0.85 : 1.05;
+    const scale = this.width < 768 ? WORLD_ZOOM_LARGE_MOBILE : WORLD_ZOOM_LARGE;
     const tileW = BASE_TILE_W * scale;
     const tileH = BASE_TILE_H * scale;
 

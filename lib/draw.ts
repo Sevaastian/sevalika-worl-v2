@@ -3,7 +3,7 @@ import { gfx } from "./settings";
 import { bodyLayers, drawLayer, hasLayeredTop, layersReady } from "./avatarLayers";
 import { FURNI_BY_TYPE, ROOM_ROCKS, ROOM_WALLS, canRideHorse, isWaterTile, oyunikaCellAt, isPartiRoute, PARTI_PODIUM } from "./constants";
 import { HAIN_ZONE_LABELS, hainZone } from "./hain";
-import { getLayout, gridToScreen, type Layout } from "./iso";
+import { CHAR_K, getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
 import type { FurniItem, NpcKind, Player, Portal, RoomTheme } from "./types";
 
@@ -3296,7 +3296,7 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
   const { sx, sy } = gridToScreen(p.gx, p.gy, l);
   ctx.save();
   ctx.translate(sx, sy + l.tileH / 2 - (p.lift ?? 0) * l.scale);
-  const s = Math.max(0.75, l.scale);
+  const s = Math.max(0.75, l.scale) * CHAR_K;
   ctx.scale(s, s);
 
   const riding = p.isRidingHorse && canRideHorse(p.role);
