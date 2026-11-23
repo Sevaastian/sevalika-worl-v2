@@ -1351,7 +1351,7 @@ end $$;
 alter table public.profiles add column if not exists tool text;
 alter table public.profiles add column if not exists last_fish timestamptz;
 alter table public.profiles drop constraint if exists profiles_tool_check;
-alter table public.profiles add constraint profiles_tool_check check (tool is null or tool = 'fishing_rod');
+alter table public.profiles add constraint profiles_tool_check check (tool is null or tool in ('fishing_rod', 'newspaper'));
 
 insert into public.rooms (slug, name, min_role, furni) values
   ('iskele', 'Sahil İskelesi', 'user', '[
