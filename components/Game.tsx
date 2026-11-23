@@ -81,6 +81,7 @@ import { HainLobbyModal, HainHud, HainMeeting, HainRoleOverlay } from "./HainUi"
 import type { HainMsg } from "@/lib/hain";
 import type { TetMsg } from "@/lib/tetris";
 import TetrisArena from "./TetrisArena";
+import NewspaperModal from "./NewspaperModal";
 import { AvatarPanel, BagPanel, BuildPanel, ChefNpcModal, FisherNpcModal, PlayerCard } from "./Panels";
 import RoleBadge from "./RoleBadge";
 import { BundleShopPanel, ExpandHomePanel, FriendsPanel, GuidePanel, QuizBanner, RealtorPanel, ShopPanel, WheelPanel } from "./SocialPanels";
@@ -1000,7 +1001,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           pl.back = cosmetic(s.back, "back");
           pl.status = typeof s.status === "string" && s.status ? s.status.replace(/[\u0000-\u001f]/g, "").slice(0, 40) : null;
           pl.hairStyle = cosmetic(s.hairStyle, "hair") ?? "hs_short";
-          pl.tool = s.tool === "fishing_rod" ? "fishing_rod" : null;
+          pl.tool = s.tool === "fishing_rod" || s.tool === "newspaper" ? s.tool : null;
           pl.pet = cosmetic(s.pet, "pet");
           pl.isFishing = Boolean(s.isFishing);
           pl.layered = Boolean(s.lay);
@@ -1751,6 +1752,16 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     return null;
   };
 
+  const togglePaper = async () => {
+    const next = profileRef.current.tool === "newspaper" ? null : "newspaper";
+    if (profileRef.current.tool === "fishing_rod") stopFishing();
+    await act(async () => {
+      const tool = await backend.equipTool(next);
+      updateProfile({ tool });
+      notify(tool ? "📰 Gazete elinde! Panelden 'Gazeteyi Oku' ile okuyabilirsin." : "Gazete cebine girdi.");
+    });
+  };
+
   const useBagItem = async (key: string) => {
     if (key === "suvari_ati") {
       toggleHorse();
@@ -2440,6 +2451,8 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onShop={() => setPanel("shop")}
               onStatus={saveStatus}
               onPhoto={takePhoto}
+              holdingPaper={profile.tool === "newspaper"}
+              onReadPaper={() => setActiveNpc("alper")}
               layered={layeredOn}
               onToggleLayered={toggleLayered}
               music={musicOn}
@@ -2503,6 +2516,17 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
           {activeNpc === "demir" && (
             <HainLobbyModal h={hain} me={profile.username} isAdmin={profile.role === "admin"} onClose={() => setActiveNpc(null)} />
+          )}
+          {activeNpc === "alper" && (
+            <NewspaperModal
+              me={profile.username}
+              events={events}
+              fetchHomes={() => backend.popularHomes()}
+              fetchTetris={() => backend.tetrisBoard()}
+              holding={profile.tool === "newspaper"}
+              onToggleHold={() => void togglePaper()}
+              onClose={() => setActiveNpc(null)}
+            />
           )}
           {activeNpc === "ali" && (
             <div className="fixed inset-0 z-30 bg-slate-950/60 flex items-center justify-center p-4" onClick={() => setActiveNpc(null)}>

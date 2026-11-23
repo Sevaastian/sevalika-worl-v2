@@ -110,7 +110,7 @@ export interface Profile extends Look {
   mutedUntil: string | null;
 }
 
-export type NpcKind = "fisher" | "chef" | "farmer" | "miner" | "dealer" | "oyunika" | "stylist" | "barber" | "accessory" | "furnisher" | "costume" | "realtor" | "guide" | "lara" | "demir" | "ali";
+export type NpcKind = "fisher" | "chef" | "farmer" | "miner" | "dealer" | "oyunika" | "stylist" | "barber" | "accessory" | "furnisher" | "costume" | "realtor" | "guide" | "lara" | "demir" | "ali" | "alper";
 
 export interface Player extends Look {
   id: string;

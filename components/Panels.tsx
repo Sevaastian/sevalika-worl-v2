@@ -40,6 +40,8 @@ export function AvatarPanel(props: {
   onShop: () => void;
   onStatus: (text: string) => void;
   onPhoto: () => void;
+  holdingPaper?: boolean;
+  onReadPaper?: () => void;
   layered: boolean;
   onToggleLayered: () => void;
   music: boolean;
@@ -123,6 +125,11 @@ export function AvatarPanel(props: {
       <button onClick={props.onToggleLayered} className={`w-full text-xs py-1.5 rounded font-medium border ${props.layered ? "bg-violet-500/20 text-violet-200 border-violet-400/40" : "bg-slate-800 text-slate-300 border-slate-700"}`}>
         🎨 Karakter: {props.layered ? "Katmanlı (PNG)" : "Klasik"}
       </button>
+      {props.holdingPaper && props.onReadPaper && (
+        <button onClick={props.onReadPaper} className="w-full bg-stone-300/15 hover:bg-stone-300/25 text-stone-100 border border-stone-300/40 text-xs py-1.5 rounded font-medium">
+          📰 Gazeteyi Oku
+        </button>
+      )}
       <button onClick={props.onPhoto} className="w-full bg-sky-500/15 hover:bg-sky-500/25 text-sky-200 border border-sky-400/40 text-xs py-1.5 rounded font-medium">
         📸 Fotoğraf Çek
       </button>

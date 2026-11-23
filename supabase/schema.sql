@@ -1374,8 +1374,8 @@ declare me public.profiles;
 begin
   me := public._me();
   if p_tool is not null then
-    if p_tool <> 'fishing_rod' then raise exception 'Geçersiz alet.'; end if;
-    if not ('fishing_rod' = any(me.inventory)) then raise exception 'Oltan yok.'; end if;
+    if p_tool not in ('fishing_rod', 'newspaper') then raise exception 'Geçersiz alet.'; end if;
+    if p_tool = 'fishing_rod' and not ('fishing_rod' = any(me.inventory)) then raise exception 'Oltan yok.'; end if;
   end if;
   update public.profiles set tool = p_tool where id = me.id;
   return p_tool;

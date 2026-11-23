@@ -973,6 +973,7 @@ export const ROOM_NPCS: Record<string, { kind: NpcKind; name: string; gx: number
   ],
   "cadde-1": [
     { kind: "guide", name: "Rehber Yağmur", gx: 18, gy: 11, shirt: "#facc15", hair: "#0f172a", skin: "#fed7aa" },
+    { kind: "alper", name: "Gazeteci Alper", gx: 20, gy: 11, shirt: "#78716c", hair: "#292524", skin: "#e0ac85" },
   ],
   oyunika: [
     { kind: "lara", name: "Parti Lara", gx: 5, gy: 3, shirt: "#ec4899", hair: "#7c2d12", skin: "#fed7aa" },

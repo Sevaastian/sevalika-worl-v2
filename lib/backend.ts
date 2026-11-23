@@ -787,15 +787,29 @@ function createDemoBackend(): Backend {
   const addLog = (action: string, target: string | null, detail: string | null) => {
     log = [{ id: log.length + 1, admin: need().username, action, target, detail, created_at: new Date().toISOString() }, ...log].slice(0, 30);
   };
-  const tileFree = (list: FurniItem[], type: FurniType, gx: number, gy: number) =>
-    !list.some((f) => f.gx === gx && f.gy === gy && FURNI_BY_TYPE[f.type].floor === FURNI_BY_TYPE[type].floor);
-  const checkPlace = (slug: string, type: FurniType, gx: number, gy: number) => {
+  const fp = (type: FurniType, rot: number) => {
+    const d = FURNI_BY_TYPE[type];
+    const w = d.wTiles ?? 1;
+    const h = d.hTiles ?? 1;
+    return rot === 1 ? { w: h, h: w } : { w, h };
+  };
+  /** Çok kareli eşyalar dahil dikdörtgen kesişim kontrolü (sunucudaki _tile_free ile aynı mantık) */
+  const tileFree = (list: FurniItem[], type: FurniType, gx: number, gy: number, rot = 0) => {
+    const n = fp(type, rot);
+    return !list.some((f) => {
+      const o = fp(f.type, f.rot ?? 0);
+      return (
+        f.gx < gx + n.w && gx < f.gx + o.w && f.gy < gy + n.h && gy < f.gy + o.h && FURNI_BY_TYPE[f.type].floor === FURNI_BY_TYPE[type].floor
+      );
+    });
+  };
+  const checkPlace = (slug: string, type: FurniType, gx: number, gy: number, rot = 0) => {
     const r = resolveRoom(slug);
     if (!r) throw new Error("Oda bulunamadı.");
     const p = need();
     if (ROLE_RANK[p.role] < ROLE_RANK[r.minRole]) throw new Error("Bu odaya erişimin yok.");
     if (isHomeSlug(slug) && slug !== homeSlug(p.username) && p.role !== "admin") throw new Error("Bu oda sana ait değil.");
-    if (!tileFree(room(slug), type, gx, gy)) throw new Error("Bu kare dolu.");
+    if (!tileFree(room(slug), type, gx, gy, rot)) throw new Error("Bu kare dolu.");
     if (room(slug).length >= 80) throw new Error("Oda dolu (en fazla 80 eşya).");
   };
   const requireSelf = (username: string) => {
@@ -959,7 +973,7 @@ function createDemoBackend(): Backend {
 
     async buyAndPlace(slug, type, gx, gy, rot) {
       const p = need();
-      checkPlace(slug, type, gx, gy);
+      checkPlace(slug, type, gx, gy, rot);
       const price = FURNI_BY_TYPE[type].price;
       if (p.role !== "admin") {
         if (p.coins < price) throw new Error("Yeterli Sanilin yok.");
@@ -973,7 +987,7 @@ function createDemoBackend(): Backend {
       const p = need();
       const idx = p.inventory.indexOf(type);
       if (idx < 0) throw new Error("Bu eşya çantanda yok.");
-      checkPlace(slug, type, gx, gy);
+      checkPlace(slug, type, gx, gy, rot);
       p.inventory.splice(idx, 1);
       room(slug).push({ id: uid(), type, gx, gy, rot, owner: p.username });
       pushRoom(slug);
@@ -1257,7 +1271,8 @@ function createDemoBackend(): Backend {
     },
     async equipTool(tool) {
       const p = need();
-      if (tool !== null && (tool !== "fishing_rod" || !p.inventory.includes("fishing_rod"))) throw new Error("Oltan yok.");
+      if (tool === "fishing_rod" && !p.inventory.includes("fishing_rod")) throw new Error("Oltan yok.");
+      if (tool !== null && tool !== "fishing_rod" && tool !== "newspaper") throw new Error("Geçersiz alet.");
       p.tool = tool;
       return tool;
     },

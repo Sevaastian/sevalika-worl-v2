@@ -309,3 +309,9 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Kontroller: ← → / ↑ X / Z / ↓ / Boşluk / C; telefonda ekran tuşları.
 - Sunucu: `tetris_scores` tablosu, `tetris_submit` (süre/skor/satır makullük kontrolü, gönderimler arası bekleme, günlük sınır) ve `tetris_board` (liderlik). schema.sql'i yeniden çalıştır.
 - Sınırlar: oyun istemcide oynanır; skor kontrolü sadece makullük sınırlarına bakar (hile tamamen engellenmez, günlük tavan zararı sınırlar). Düello galibini istemci bildirir. Düello ağ gecikmesi gerçek kullanımda denenmeli. "Tetris" marka olduğu için oyun adı Blok Rüzgârı.
+
+## v24 — Gazeteci Alper ve elde tutulan gazete 📰
+- **Gazeteci Alper** (Cadde 1, Rehber Yağmur'un yanı): tıklayınca "Sevalika Günlüğü" açılır. İçerik günlük döner: manşet (aktif etkinlik varsa o), Blok Rüzgârı rekorları, en beğenilen evler, Alper'in köşesi (oyun ipuçları), burç yorumu, günün bulmacası, küçük ilanlar.
+- **"Gazeteyi Elime Al":** karakter gazeteyi elinde taşır, herkes görür (`tool = newspaper`, `equip_tool` artık bunu da kabul eder; ücretsiz). Elde tutarken sol panelde "📰 Gazeteyi Oku" butonu çıkar.
+- SQL: `equip_tool` güncellendi → schema.sql'i yeniden çalıştır.
+- Meslek sistemi (Süvari, Rehber, Gazeteci, Yönetmen, Sanatçı…) için bu ilk adım: NPC + mesleğe özel eşya. Sonraki adım: profilde meslek seçimi, meslek rozeti/etiketi ve her mesleğe özel görevler.

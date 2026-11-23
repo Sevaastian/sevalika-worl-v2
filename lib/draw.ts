@@ -2981,6 +2981,26 @@ function drawStandardAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, 
   if (p.hat) drawHat(ctx, p.hat, ay);
 }
 
+/** Elde tutulan gazete (katlanmış, hafif eğik) */
+function drawNewspaper(ctx: Ctx, ay: number, time: number) {
+  const bob = Math.sin(time / 500) * 0.6;
+  ctx.save();
+  ctx.translate(11, ay - 20 + bob);
+  ctx.rotate(-0.28);
+  ctx.fillStyle = "#e7e5e4";
+  ctx.fillRect(-6, -8, 12, 16);
+  ctx.strokeStyle = "#57534e";
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(-6, -8, 12, 16);
+  ctx.fillStyle = "#1c1917";
+  ctx.fillRect(-5, -7, 10, 3);
+  ctx.fillStyle = "#78716c";
+  for (let i = 0; i < 4; i++) ctx.fillRect(-5, -2 + i * 3, 4.2, 1.2);
+  ctx.fillStyle = "#a8a29e";
+  ctx.fillRect(0.5, -2, 4.5, 5);
+  ctx.restore();
+}
+
 function drawFishingRod(ctx: Ctx, ay: number, isFishing: boolean, time: number) {
   const sway = isFishing ? Math.sin(time / 180) * 3 : 0;
   ctx.strokeStyle = "#d97706";
@@ -3150,6 +3170,22 @@ function drawNpcOutfit(ctx: Ctx, kind: NpcKind, ay: number) {
     });
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(-9, ay - 22, 18, 2);
+    return;
+  }
+  if (kind === "alper") {
+    // Gazeteci: fötr şapka, PRESS kartı ve koltuk altında gazete
+    ctx.fillStyle = "#57534e";
+    ctx.fillRect(-12, ay - 41, 24, 3);
+    ctx.fillStyle = "#44403c";
+    ctx.fillRect(-8, ay - 49, 16, 9);
+    ctx.fillStyle = "#fde68a";
+    ctx.fillRect(-8, ay - 42, 16, 2);
+    ctx.fillStyle = "#fef3c7";
+    ctx.fillRect(-9, ay - 22, 7, 5);
+    ctx.fillStyle = "#b91c1c";
+    ctx.font = "bold 4px sans-serif";
+    ctx.fillText("PRESS", -9, ay - 18);
+    drawNewspaper(ctx, ay + 3, 0);
     return;
   }
   if (kind === "ali") {
@@ -3336,12 +3372,13 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
   if (seated && !lying) drawSeatedLegs(ctx, ay, legColor, !p.seatType, time);
 
   if (p.tool === "fishing_rod" || p.isFishing) drawFishingRod(ctx, ay, Boolean(p.isFishing), time);
+  else if (p.tool === "newspaper") drawNewspaper(ctx, ay, time);
   ctx.restore();
   FACE_BACK = false;
 
   ctx.font = "bold 11px sans-serif";
   ctx.fillStyle = nameColor;
-  const NPC_ICON: Record<NpcKind, string> = { fisher: "🎣 ", chef: "👨‍🍳 ", farmer: "🌾 ", miner: "⛏️ ", dealer: "🎰 ", oyunika: "🎲 ", stylist: "👗 ", barber: "✂️ ", accessory: "🎀 ", furnisher: "🛋️ ", costume: "🎭 ", realtor: "🏡 ", guide: "🧭 ", lara: "🎉 ", demir: "🚀 ", ali: "🕹️ " };
+  const NPC_ICON: Record<NpcKind, string> = { fisher: "🎣 ", chef: "👨‍🍳 ", farmer: "🌾 ", miner: "⛏️ ", dealer: "🎰 ", oyunika: "🎲 ", stylist: "👗 ", barber: "✂️ ", accessory: "🎀 ", furnisher: "🛋️ ", costume: "🎭 ", realtor: "🏡 ", guide: "🧭 ", lara: "🎉 ", demir: "🚀 ", ali: "🕹️ ", alper: "📰 " };
   const prefix = p.isNpc ? NPC_ICON[p.npcKind ?? "fisher"] : isStaff ? "⚔️ " : p.role === "vip" ? "💎 " : "";
   centerText(ctx, `${prefix}${p.name}`, 0, lying ? 4 : 16);
   if (p.status && !p.isNpc && !lying) {
