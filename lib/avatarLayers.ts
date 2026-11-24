@@ -1,25 +1,24 @@
 /**
- * Katmanlı karakter sistemi.
- * public/sprites/avatar/ altındaki PNG parçaları üst üste çizilir:
- *   legs, body (ten rengi), shirt (tişört rengi), hs_<stil> (saç rengi; _b = arkadan), face.
- * Her dosya 5 kareli yatay sheet'tir (kare 160x240 px): kare 0 duruş, 1–4 yürüyüş.
- * Parçalar gri tonlu çizilir; oyun ten/saç/tişört rengini çarparak uygular (tint).
- * Yeni parça eklemek için aynı ölçülerde PNG koyman yeterli (bkz. docs/SPRITE-REHBERI.md).
+ * Katmanlı karakter sistemi (v27: 3D'den üretilmiş, 4 yönlü).
+ * public/sprites/avatar3/ altındaki PNG sheet'leri üst üste çizilir:
+ *   body (ten), face, legs, shoes, shirt (tişört rengi), tp_* (kıyafet), hs_* (saç), hat_*, gl_*, bk_*.
+ * Her sheet 8 sütun x 4 satırdır (kare 224x304 px): sütun 0 duruş, 1-6 yürüyüş, 7 oturuş; satır = yön (0 GD, 1 GB, 2 KB, 3 KD).
+ * Gri tonlu parçalar oyunda renkle çarpılır (tint). Üretici: tools/gen_char3d.py; kendi PNG'lerini aynı ad/ölçüyle koyabilirsin.
  */
-export const LAYER_FRAME_W = 160;
-export const LAYER_FRAME_H = 240;
-export const LAYER_FRAMES = 5;
-/** 1x ölçekte çizim boyutu (kare/4) ve ayak noktası kaydırması */
-export const LAYER_DRAW_W = 40;
-export const LAYER_DRAW_H = 60;
-export const LAYER_FEET = 58;
+export const LAYER_FRAME_W = 224;
+export const LAYER_FRAME_H = 304;
+export const LAYER_FRAMES = 8;
+/** 1x ölçekte çizim boyutu (kare/4) ve ayak noktası */
+export const LAYER_DRAW_W = 56;
+export const LAYER_DRAW_H = 76;
+export const LAYER_FEET = 74;
 
 const KEY = "sw_layered_avatar";
 export function getLayeredPref(): boolean {
   try {
-    return typeof window !== "undefined" && window.localStorage.getItem(KEY) === "1";
+    return typeof window === "undefined" || window.localStorage.getItem(KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 export function setLayeredPref(v: boolean) {
@@ -76,8 +75,6 @@ function tintedSheet(src: string, color: string | null): CanvasImageSource | nul
 export interface LayerSpec {
   src: string;
   tint: string | null;
-  /** hareketli parça: kare yürüyüşle değişir; false ise hep kare 0 */
-  animated: boolean;
 }
 
 /** Tüm parçalar yüklendi mi? (hazır değilse klasik çizime dönülür) */
@@ -87,28 +84,42 @@ export function layersReady(specs: LayerSpec[]): boolean {
   return ok;
 }
 
-export function drawLayer(ctx: CanvasRenderingContext2D, spec: LayerSpec, frame: number, ay: number) {
+/** frame: 0 duruş, 1-6 yürüyüş, 7 oturuş; dir: 0 GD, 1 GB, 2 KB, 3 KD */
+export function drawLayer(ctx: CanvasRenderingContext2D, spec: LayerSpec, frame: number, dir: number, ay: number) {
   const sheet = tintedSheet(spec.src, spec.tint);
   if (!sheet) return;
-  const f = spec.animated ? frame : 0;
-  ctx.drawImage(sheet, f * LAYER_FRAME_W, 0, LAYER_FRAME_W, LAYER_FRAME_H, -LAYER_DRAW_W / 2, ay - LAYER_FEET, LAYER_DRAW_W, LAYER_DRAW_H);
+  ctx.drawImage(sheet, frame * LAYER_FRAME_W, dir * LAYER_FRAME_H, LAYER_FRAME_W, LAYER_FRAME_H, -LAYER_DRAW_W / 2, ay - LAYER_FEET, LAYER_DRAW_W, LAYER_DRAW_H);
 }
 
 const KNOWN_HAIR = ["hs_short", "hs_long", "hs_spiky", "hs_bun", "hs_afro", "hs_mohawk", "hs_pony", "hs_curly"];
+const LAYERED_TOPS = ["tp_hoodie", "tp_stripe", "tp_suit", "tp_jersey", "tp_overalls", "tp_hawaii"];
+const LAYERED_HATS = ["hat_beanie", "hat_cap", "hat_tophat", "hat_cowboy", "hat_crown", "hat_headphones", "hat_beret", "hat_bucket", "hat_wizard", "hat_pirate", "hat_flower", "hat_catears"];
+const LAYERED_GLASSES = ["gl_nerd", "gl_shades", "gl_neon", "gl_star", "gl_round", "gl_heart", "gl_visor"];
+const LAYERED_BACKS = ["bk_backpack", "bk_cape", "bk_angel", "bk_butterfly", "bk_devil"];
+const inList = (l: string[], id: string | null | undefined) => !!id && l.includes(id);
+export const hasLayeredTop = (id: string | null | undefined) => inList(LAYERED_TOPS, id);
+export const hasLayeredHat = (id: string | null | undefined) => inList(LAYERED_HATS, id);
+export const hasLayeredGlasses = (id: string | null | undefined) => inList(LAYERED_GLASSES, id);
+export const hasLayeredBack = (id: string | null | undefined) => inList(LAYERED_BACKS, id);
 
-const LAYERED_TOPS = ['tp_hoodie', 'tp_stripe', 'tp_suit', 'tp_jersey', 'tp_overalls', 'tp_hawaii'];
-/** Katmanlı PNG'si olan üst kıyafet mi? (yoksa vektör çizim kullanılır) */
-export const hasLayeredTop = (id: string | null | undefined) => !!id && LAYERED_TOPS.includes(id);
-
-export function bodyLayers(opts: { skin: string; shirt: string; hair: string; hairStyle: string; back: boolean; legs: boolean; top?: string | null }): { under: LayerSpec[]; over: LayerSpec[] } {
-  const base = "/sprites/avatar/";
+export function bodyLayers(opts: {
+  skin: string; shirt: string; hair: string; hairStyle: string; legs: boolean; faceFront: boolean;
+  top?: string | null; hat?: string | null; glasses?: string | null; back?: string | null;
+}): LayerSpec[] {
+  const base = "/sprites/avatar3/";
   const style = KNOWN_HAIR.includes(opts.hairStyle) ? opts.hairStyle : "hs_short";
-  const under: LayerSpec[] = [];
-  if (opts.legs) under.push({ src: base + "legs.png", tint: null, animated: true });
-  under.push({ src: base + "body.png", tint: opts.skin, animated: true });
-  under.push({ src: base + "shirt.png", tint: opts.shirt, animated: true });
-  if (hasLayeredTop(opts.top)) under.push({ src: base + `top_${opts.top}.png`, tint: null, animated: true });
-  const over: LayerSpec[] = [{ src: base + `${style}${opts.back ? "_b" : ""}.png`, tint: opts.hair, animated: false }];
-  if (!opts.back) over.push({ src: base + "face.png", tint: null, animated: true });
-  return { under, over };
+  const out: LayerSpec[] = [];
+  if (hasLayeredBack(opts.back)) out.push({ src: `${base}${opts.back}.png`, tint: null });
+  if (opts.legs) {
+    out.push({ src: base + "legs.png", tint: null });
+    out.push({ src: base + "shoes.png", tint: null });
+  }
+  out.push({ src: base + "body.png", tint: opts.skin });
+  out.push({ src: base + "shirt.png", tint: opts.shirt });
+  if (hasLayeredTop(opts.top)) out.push({ src: `${base}${opts.top}.png`, tint: null });
+  if (opts.faceFront) out.push({ src: base + "face.png", tint: null });
+  out.push({ src: `${base}${style}.png`, tint: opts.hair });
+  if (hasLayeredHat(opts.hat)) out.push({ src: `${base}${opts.hat}.png`, tint: null });
+  if (opts.faceFront && hasLayeredGlasses(opts.glasses)) out.push({ src: `${base}${opts.glasses}.png`, tint: null });
+  return out;
 }

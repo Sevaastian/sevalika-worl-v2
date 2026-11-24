@@ -1,5 +1,6 @@
 import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile, PARTI_PODIUM } from "./constants";
 import { drawAvatar, drawBubble, drawFlag, drawFurni, drawHainBody, drawHainMark, drawHainWall, drawPet, drawPodiumBlock, podiumLift, drawRock, drawRoom, drawRug, roomRocks, roomWalls } from "./draw";
+import { VEH_FW, VEH_FH, VEH_FEET, vehicleSheet } from "./vehicles";
 import { CHAR_K, WORLD_ZOOM_LARGE, WORLD_ZOOM_LARGE_MOBILE, getLayout, gridToScreen, inGrid, screenToGrid, type Layout } from "./iso";
 import { lighting, updateLighting } from "./ambience";
 import { gfx } from "./settings";
@@ -42,7 +43,7 @@ export class GameEngine {
   private fx: { x: number; y: number; vx: number; vy: number; life: number; max: number; c: string; r: number; k: number }[] = [];
   private nextBurst = 0;
   /** Caddede yavaşça geçen süs araçları (çarpışma yok; yaya önlerindeyse bekler) */
-  private traffic: { type: "car_red" | "car_blue" | "car_yellow"; lane: number; x: number; dir: 1 | -1; v: number }[] = [];
+  private traffic: { type: string; lane: number; x: number; dir: 1 | -1; v: number }[] = [];
 
   furni: FurniItem[] = [];
   hover: Tile | null = null;
@@ -125,7 +126,7 @@ export class GameEngine {
     const w = sp?.wTiles ?? def?.wTiles ?? 1;
     const h = sp?.hTiles ?? def?.hTiles ?? 1;
     // Döndürülmüş (rot=1) çok kareli eşyalarda genişlik ve derinlik yer değiştirir
-    return f.rot === 1 ? { wTiles: h, hTiles: w } : { wTiles: w, hTiles: h };
+    return (f.rot ?? 0) % 2 === 1 ? { wTiles: h, hTiles: w } : { wTiles: w, hTiles: h };
   }
 
   private blockedTiles(goal?: Tile) {
@@ -406,7 +407,15 @@ export class GameEngine {
     // Cadde trafiği
     if (this.room.slug === "cadde-1") {
       if (this.traffic.length === 0) {
-        this.traffic.push({ type: "car_blue", lane: 7, x: 3, dir: 1, v: 1.7 }, { type: "car_yellow", lane: 8, x: 14, dir: 1, v: 1.5 }, { type: "car_red", lane: 7, x: 26, dir: 1, v: 1.3 });
+        // İki yönlü trafik: şerit 8 güneydoğuya (+x), şerit 7 kuzeybatıya (-x) akar
+        this.traffic.push(
+          { type: "car_blue", lane: 8, x: 3, dir: 1, v: 1.7 },
+          { type: "bus", lane: 8, x: 20, dir: 1, v: 1.2 },
+          { type: "car_yellow", lane: 7, x: 14, dir: -1, v: 1.5 },
+          { type: "police", lane: 7, x: 30, dir: -1, v: 1.9 },
+          { type: "car_red", lane: 8, x: 31, dir: 1, v: 1.3 },
+          { type: "pickup", lane: 7, x: 4, dir: -1, v: 1.4 },
+        );
       }
       for (const c of this.traffic) {
         let sp = c.v;
@@ -763,21 +772,16 @@ export class GameEngine {
     }
     for (const c of this.traffic) {
       items.push({
-        depth: c.x + c.lane + 1,
+        depth: c.x + c.lane + 1.2,
         draw: () => {
-          const meta = FURNI_SPRITES[c.type];
-          const img = meta ? sprites.get(meta.src) : null;
-          if (!meta || !img) return;
-          const { sx, sy } = gridToScreen(c.x + 0.5, c.lane, l);
-          const w = meta.drawW * l.scale;
-          const h = meta.drawH * l.scale;
-          const footY = sy + l.tileH * 0.75;
-          ctx.save();
-          ctx.translate(sx, 0);
-          // Sprite'ler yalnızca +x yönüne (sağ-aşağı) bakıyor; ters yön için arka görünüm çizimi yok.
-          if (c.dir === -1) ctx.scale(-1, 1);
-          ctx.drawImage(img, -w / 2, footY - h + (meta.offsetY ?? 6) * l.scale, w, h);
-          ctx.restore();
+          const img = vehicleSheet(c.type);
+          if (!img) return;
+          // 4 yönlü sheet: 0 GD(+x), 1 GB(+y), 2 KB(-x), 3 KD(-y)
+          const col = c.dir === 1 ? 0 : 2;
+          const { sx, sy } = gridToScreen(c.x + 0.5, c.lane + 0.5, l);
+          const w = (VEH_FW / 4) * l.scale;
+          const h = (VEH_FH / 4) * l.scale;
+          ctx.drawImage(img, col * VEH_FW, 0, VEH_FW, VEH_FH, sx - w / 2, sy - (VEH_FEET / 4) * l.scale, w, h);
         },
       });
     }

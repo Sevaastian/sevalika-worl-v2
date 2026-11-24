@@ -1,10 +1,13 @@
 import { lighting, silhouette } from "./ambience";
 import { gfx } from "./settings";
-import { bodyLayers, drawLayer, hasLayeredTop, layersReady } from "./avatarLayers";
+import { bodyLayers, drawLayer, hasLayeredTop, hasLayeredHat, hasLayeredGlasses, hasLayeredBack, layersReady } from "./avatarLayers";
 import { FURNI_BY_TYPE, ROOM_ROCKS, ROOM_WALLS, canRideHorse, isWaterTile, oyunikaCellAt, isPartiRoute, PARTI_PODIUM } from "./constants";
 import { HAIN_ZONE_LABELS, hainZone } from "./hain";
 import { CHAR_K, getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
+import { drawHorseSprite } from "./horse";
+import { f3Frame } from "./f3";
+import { drawFloorTex, drawWallTex, isFloorKind, wallKindFor } from "./tiles";
 import type { FurniItem, NpcKind, Player, Portal, RoomTheme } from "./types";
 
 type Ctx = CanvasRenderingContext2D;
@@ -923,12 +926,21 @@ function drawStyledTile(
   hoverColor: string,
 ) {
   const st = tileStyle(slug, gx, gy, theme);
-  tilePath(ctx, sx, sy, l);
-  ctx.fillStyle = (gx + gy) % 2 === 0 ? st.a : st.b;
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = st.edge;
-  ctx.stroke();
+  const fillCol = (gx + gy) % 2 === 0 ? st.a : st.b;
+  const seamless = st.kind === "grass" || st.kind === "sand" || st.kind === "asphalt" || st.kind === "soil";
+  const variant = ((gx * 73 + gy * 137) >> 2) % 4;
+  const useTex = isFloorKind(st.kind) && drawFloorTex(ctx, st.kind, fillCol, variant, sx, sy, l.tileW, l.tileH);
+  if (!useTex) {
+    tilePath(ctx, sx, sy, l);
+    ctx.fillStyle = fillCol;
+    ctx.fill();
+  }
+  if (!useTex || !seamless) {
+    tilePath(ctx, sx, sy, l);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = useTex ? "rgba(0,0,0,0.10)" : st.edge;
+    ctx.stroke();
+  }
 
   const s = l.scale;
   const hw = l.tileW / 2;
@@ -937,7 +949,7 @@ function drawStyledTile(
   const h = (gx * 73 + gy * 137) % 100;
 
   // Üst kenarlara ışık (bevel) — her karoyu net okunur yapar
-  if (st.kind !== "grass" && st.kind !== "asphalt") {
+  if (!useTex && st.kind !== "grass" && st.kind !== "asphalt") {
     ctx.strokeStyle = "rgba(255,255,255,0.28)";
     ctx.lineWidth = Math.max(1, 1.1 * s);
     ctx.beginPath();
@@ -947,7 +959,7 @@ function drawStyledTile(
     ctx.stroke();
   }
 
-  switch (st.kind) {
+  switch (useTex && st.kind !== "carpet" ? "plain" : st.kind) {
     case "wood":
       drawWoodPlanks(ctx, sx, sy, l, gx, gy);
       break;
@@ -1149,7 +1161,27 @@ function drawWallPanel(
   color: string,
   count: number,
   lit: boolean,
+  slug = "",
 ) {
+  if (drawWallTex(ctx, wallKindFor(slug), color, a, b, wallH, count)) {
+    // yön ışığı + dış çizgi
+    ctx.beginPath();
+    ctx.moveTo(a.sx, a.sy);
+    ctx.lineTo(b.sx, b.sy);
+    ctx.lineTo(b.sx, b.sy - wallH);
+    ctx.lineTo(a.sx, a.sy - wallH);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, a.sy - wallH, 0, a.sy);
+    g.addColorStop(0, lit ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)");
+    g.addColorStop(1, lit ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.20)");
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(30, 20, 40, 0.55)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    return;
+  }
   const poly = (y0: number, y1: number) => {
     ctx.beginPath();
     ctx.moveTo(a.sx, a.sy - y0);
@@ -1217,8 +1249,8 @@ export function drawRoom(
   const wallH = (slug === "cadde-1" || slug === "sahil-kasabasi" ? 115 : 110) * l.scale;
 
   drawSlab(ctx, l, slug, theme);
-  drawWallPanel(ctx, l, top, left, wallH, theme.wallLeft, rows, false);
-  drawWallPanel(ctx, l, top, right, wallH, theme.wallRight, cols, true);
+  drawWallPanel(ctx, l, top, left, wallH, theme.wallLeft, rows, false, slug);
+  drawWallPanel(ctx, l, top, right, wallH, theme.wallRight, cols, true, slug);
 
   drawRoomWallDecor(ctx, l, slug, time);
 
@@ -1499,8 +1531,9 @@ export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const df = FURNI_BY_TYPE[item.type];
   const bw = sp?.wTiles ?? df?.wTiles ?? 1;
   const bh = sp?.hTiles ?? df?.hTiles ?? 1;
-  const w = item.rot === 1 ? bh : bw;
-  const h = item.rot === 1 ? bw : bh;
+  const odd = (item.rot ?? 0) % 2 === 1;
+  const w = odd ? bh : bw;
+  const h = odd ? bw : bh;
   const c = gridToScreen(item.gx + (w - 1) / 2, item.gy + (h - 1) / 2, l);
   const ax = c.sx;
   const ay = c.sy + l.tileH * ((w + h) / 4);
@@ -1519,13 +1552,38 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const spriteMeta = FURNI_SPRITES[item.type];
   const baseW = spriteMeta?.wTiles ?? def?.wTiles ?? 1;
   const baseH = spriteMeta?.hTiles ?? def?.hTiles ?? 1;
-  const wTiles = item.rot === 1 ? baseH : baseW;
-  const hTiles = item.rot === 1 ? baseW : baseH;
+  const oddRot = (item.rot ?? 0) % 2 === 1;
+  const wTiles = oddRot ? baseH : baseW;
+  const hTiles = oddRot ? baseW : baseH;
 
   // Çok kareli yapılarda görselin taban merkezini kapladığı karelerin ortasına oturturuz
   const centerGx = item.gx + (wTiles - 1) / 2;
   const centerGy = item.gy + (hTiles - 1) / 2;
   const { sx, sy } = gridToScreen(centerGx, centerGy, l);
+
+  // 0) 4 yönlü 3D eşya sprite'ı (rot 0-3): zemin merkezi, kapladığı dikdörtgenin ortasına oturur
+  const f3 = FURNI_BY_TYPE[item.type] ? f3Frame(item.type, item.rot ?? 0) : null;
+  if (f3) {
+    const c = gridToScreen(item.gx + wTiles / 2, item.gy + hTiles / 2, l);
+    const u = l.scale;
+    const w = f3.fw / 4 * u;
+    const h = f3.fh / 4 * u;
+    const fy = (f3.feet / 4) * u;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    if (!gfx.low && lighting.shadowAlpha > 0.01 && f3.fh <= 300) {
+      const sil = silhouette(f3.canvas as CanvasImageSource & { width: number; height: number });
+      if (sil) {
+        ctx.save();
+        ctx.globalAlpha = lighting.shadowAlpha;
+        ctx.transform(1, 0, lighting.shadowSkew, -lighting.shadowSquash, c.sx, c.sy);
+        ctx.drawImage(sil, -w / 2, -fy, w, h);
+        ctx.restore();
+      }
+    }
+    ctx.drawImage(f3.canvas, c.sx - w / 2, c.sy - fy, w, h);
+    return;
+  }
 
   // 1) Eğer bu eşya için public/sprites/ altında PNG dosyası varsa doğrudan onu çiz!
   if (spriteMeta) {
@@ -2883,24 +2941,37 @@ function drawEmoteArm(ctx: Ctx, p: Player, ay: number, time: number) {
   ctx.restore();
 }
 
+let LAYER_DIR = 0;
+let LAYER_FLIP = 1;
+let LAYER_SEATED = false;
 function drawLayeredAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number): boolean {
   const standing = !p.isSitting && !p.isRidingHorse;
-  const { under, over } = bodyLayers({ skin: p.skinColor, shirt: p.shirtColor, hair: p.hairColor, hairStyle: p.hairStyle, back: FACE_BACK, legs: standing, top: p.top });
-  if (!layersReady([...under, ...over])) return false;
-  const frame = isMoving && standing ? 1 + (Math.floor(time / 150) % 4) : 0;
-  if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
-  for (const l of under) drawLayer(ctx, l, frame, ay);
-  const armSwing = isMoving && standing ? Math.sin(time / 95) * 6 : Math.sin(time / 700) * 0.6;
-  if (p.top && !hasLayeredTop(p.top)) drawTop(ctx, p.top, ay, armSwing, p.shirtColor);
-  for (const l of over) drawLayer(ctx, l, frame, ay);
+  const seatedPose = p.isSitting && !p.isRidingHorse && !isMoving && p.seatType !== "lounger";
+  const specs = bodyLayers({
+    skin: p.skinColor, shirt: p.shirtColor, hair: p.hairColor, hairStyle: p.hairStyle, legs: standing || seatedPose,
+    faceFront: !FACE_BACK, top: p.top, hat: p.hat, glasses: p.glasses, back: p.back,
+  });
+  if (!layersReady(specs)) return false;
+  if (p.back && !hasLayeredBack(p.back)) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
+  const frame = seatedPose ? 7 : isMoving && standing ? 1 + (Math.floor(time / 110) % 6) : 0;
+  // Sprite zaten 4 yönlü: dışarıdaki yatay çevirmeyi geri al
+  ctx.save();
+  if (LAYER_FLIP === -1) ctx.scale(-1, 1);
+  for (const l of specs) drawLayer(ctx, l, frame, LAYER_DIR, ay);
+  ctx.restore();
+  LAYER_SEATED = seatedPose;
+  if (p.top && !hasLayeredTop(p.top)) {
+    const armSwing = isMoving && standing ? Math.sin(time / 95) * 6 : Math.sin(time / 700) * 0.6;
+    drawTop(ctx, p.top, ay, armSwing, p.shirtColor);
+  }
   drawEmoteArm(ctx, p, ay, time);
-  if (p.glasses && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
-  if (p.hat) drawHat(ctx, p.hat, ay);
+  if (p.glasses && !hasLayeredGlasses(p.glasses) && !FACE_BACK) drawGlasses(ctx, p.glasses, ay);
+  if (p.hat && !hasLayeredHat(p.hat)) drawHat(ctx, p.hat, ay);
   return true;
 }
 
 function drawStandardAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number) {
-  if (p.layered && !p.isNpc && drawLayeredAvatar(ctx, p, ay, isMoving, time)) return;
+  if ((p.layered || p.isNpc) && drawLayeredAvatar(ctx, p, ay, isMoving, time)) return;
   if (p.back) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
   if (!p.isSitting && !p.isRidingHorse) {
     drawAnimatedLegs(ctx, ay, "#1e293b", isMoving, time, 5);
@@ -3303,16 +3374,19 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
   const isMoving = p.path.length > 0;
   const seated = p.isSitting && !riding && !isMoving;
   const lying = seated && p.seatType === "lounger";
-  const sitSeatRot = p.seatRot === 1 ? 1 : 0;
+  const sitSeatRot = (p.seatRot ?? 0) % 2 === 1 ? 1 : 0;
   // Oturan karakter eşyanın baktığı yöne döner (rot 0: güneydoğu, rot 1: güneybatı)
-  const dir = seated && p.seatType ? (sitSeatRot === 1 ? 1 : 0) : (p.dir ?? 1);
+  const dir = seated && p.seatType ? (p.seatType === "lounger" ? sitSeatRot : ((p.seatRot ?? 0) % 4 + 4) % 4) : (p.dir ?? 1);
   const flip = dir === 1 || dir === 2 ? -1 : 1;
   FACE_BACK = !lying && (dir === 2 || dir === 3);
+  LAYER_DIR = dir;
+  LAYER_FLIP = lying ? 1 : flip;
+  LAYER_SEATED = false;
 
   const danceBounce = p.isDancing ? Math.sin(time / 110) * 5 : 0;
   const walkBob = isMoving && !riding ? Math.abs(Math.sin(time / 95)) * 2.2 : 0;
   const seatAy = seated ? (p.seatType ? SEAT_AY[p.seatType] ?? 3 : 8) : 0;
-  const ay = seatAy + (riding ? -14 : 0) - danceBounce - walkBob;
+  const ay = seatAy + (riding ? -21 : 0) - danceBounce - walkBob;
   const lower = p.name.trim().toLowerCase();
   const isStaff = p.role === "admin" || p.role === "suvari";
 
@@ -3346,7 +3420,12 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
     ctx.scale(1, 1 + Math.sin(time / 520 + p.gx) * 0.014);
   }
 
-  if (riding) drawHorse(ctx, isMoving, time);
+  if (riding) {
+    const hf = isMoving ? 1 + (Math.floor(time / 85) % 6) : 0;
+    const hd = lying ? 0 : dir;
+    if (drawHorseSprite(ctx, hf, hd, lying ? 1 : flip, "horse")) drawHorseSprite(ctx, 0, hd, lying ? 1 : flip, "rider_legs");
+    else drawHorse(ctx, isMoving, time);
+  }
 
   const walking = isMoving && !riding;
   const body: Player = lying ? { ...p, isSitting: false } : p;
@@ -3369,7 +3448,7 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
     drawStandardAvatar(ctx, body, ay, walking, time);
     nameColor = isStaff ? "#fbbf24" : p.role === "vip" ? "#d8b4fe" : isMe ? "#38bdf8" : "#facc15";
   }
-  if (seated && !lying) drawSeatedLegs(ctx, ay, legColor, !p.seatType, time);
+  if (seated && !lying && !LAYER_SEATED) drawSeatedLegs(ctx, ay, legColor, !p.seatType, time);
 
   if (p.tool === "fishing_rod" || p.isFishing) drawFishingRod(ctx, ay, Boolean(p.isFishing), time);
   else if (p.tool === "newspaper") drawNewspaper(ctx, ay, time);
@@ -3406,7 +3485,7 @@ export function drawBubble(
 ): number {
   if (!speaker) return 0;
   const { sx, sy } = gridToScreen(speaker.gx, speaker.gy, l);
-  const horseBonus = speaker.isRidingHorse && canRideHorse(speaker.role) ? 14 * l.scale : 0;
+  const horseBonus = speaker.isRidingHorse && canRideHorse(speaker.role) ? 21 * l.scale : 0;
 
   const isStaff = role === "admin" || role === "suvari";
   const isVip = role === "vip";

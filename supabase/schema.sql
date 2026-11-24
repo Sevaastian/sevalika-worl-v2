@@ -368,10 +368,10 @@ end $$;
 -- v18: döndürülmüş (rot=1) eşyalarda genişlik/derinlik yer değiştirir
 create or replace function public._fw(p_type text, p_rot int) returns int
 language sql immutable set search_path = '' as $$
-  select case when p_rot = 1 then public._furni_h(p_type) else public._furni_w(p_type) end $$;
+  select case when p_rot % 2 = 1 then public._furni_h(p_type) else public._furni_w(p_type) end $$;
 create or replace function public._fh(p_type text, p_rot int) returns int
 language sql immutable set search_path = '' as $$
-  select case when p_rot = 1 then public._furni_w(p_type) else public._furni_h(p_type) end $$;
+  select case when p_rot % 2 = 1 then public._furni_w(p_type) else public._furni_h(p_type) end $$;
 
 drop function if exists public._tile_free(jsonb, text, int, int);
 create or replace function public._tile_free(p_furni jsonb, p_type text, p_gx int, p_gy int, p_rot int default 0) returns boolean
@@ -526,7 +526,8 @@ begin
   if me.role <> 'admin' and r.owner_id is distinct from me.id and (item->>'owner') is distinct from me.id::text then
     raise exception 'Bu eşya sana ait değil.';
   end if;
-  new_rot := case when coalesce((item->>'rot')::int, 0) = 1 then 0 else 1 end;
+  -- v31: 4 yönlü eşyalar (rot 0-3) dört adımda döner; diğerleri iki adımda
+  new_rot := (coalesce((item->>'rot')::int, 0) + 1) % case when item->>'type' in ('bench','chair','sofa','lounger','tv','bookshelf','bed','logseat','beanbag','plant','lamp','streetlight','table','counter','casinotable','bin','umbrella','campfire','mannequin','surfboard','phone_booth','kiosk','ore_cart') then 4 else 2 end;
   select coalesce(jsonb_agg(f), '[]'::jsonb) into rest from jsonb_array_elements(r.furni) f where f->>'id' <> p_id;
   perform public._check_place(p_room, rest, item->>'type', (item->>'gx')::int, (item->>'gy')::int, new_rot);
   update public.rooms

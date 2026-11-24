@@ -1257,3 +1257,6 @@ export const DAILY_REWARDS = [500, 550, 650, 750, 900, 1100, 2000];
 
 /** Hain Avı: harita duvarları (hareketi engeller, istemcide çizilir) */
 export const ROOM_WALLS: Record<string, [number, number][]> = { "hain-avi": HAIN_WALLS };
+
+/** 4 yönlü 3D sprite'ı olan eşyalar (rot 0-3 arasında döner) */
+export const FURNI_DIRS = ["bench", "chair", "sofa", "lounger", "tv", "bookshelf", "bed", "logseat", "beanbag", "plant", "lamp", "streetlight", "table", "counter", "casinotable", "bin", "umbrella", "campfire", "mannequin", "surfboard", "phone_booth", "kiosk", "ore_cart"];

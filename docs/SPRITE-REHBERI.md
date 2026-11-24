@@ -72,3 +72,60 @@ at, NPC kıyafet detayları, gazete/olta, arka-yön (kuzey) araba görünümü, 
 - Hepsi şeffaf PNG, izometrik 2:1, ışık sol-üstten, gölge yok (oyun ekliyor), 4x çalışma boyutu (1 kare = 256x128).
 - Dosya adları yukarıdaki gibi küçük harf + alt çizgi; ben `lib/sprites.ts` içine tanıtmayı yaparım (boyutlar doğruysa `drawW/drawH`'ı otomatik hesaplarım).
 - **Hepsini ben de üretebilirim:** kodla piksel-sanat (v8/v9'daki gibi) üretip PNG'ye dökebilirim; ama senin çizdirdiğin/lisanslı görseller her zaman daha özgün ve detaylı olur. Hangisini istediğini söylemen yeterli.
+
+
+---
+
+## 4. v27 — 3D'den üretilmiş 4 yönlü karakter (public/sprites/avatar3)
+
+Karakterin tüm parçaları artık PNG katmanıdır ve oyunun varsayılanıdır (ayarlardan "Katmanlı karakter" kapatılırsa eski vektör çizime döner).
+Üretici: `tools/gen_char3d.py` (+ `tools/r3d.py` ışın izleyici, `tools/char3d.py` model tanımları). Çalıştırma: `python3 tools/gen_char3d.py hepsi` (numpy, scipy, Pillow gerekir; ~10 dk).
+
+**Sheet düzeni:** 8 sütun x 4 satır, kare 224x304 px (1 birim = 4 px), ayak noktası kare alt-ortasının 8 px üstü.
+Sütun: 0 duruş, 1–6 yürüyüş, 7 oturuş. Satır (yön): 0 güneydoğu, 1 güneybatı, 2 kuzeybatı, 3 kuzeydoğu.
+
+**Katmanlar (çizim sırası):** `bk_*` (sırt) → `legs` → `shoes` → `body` (ten rengiyle çarpılır) → `shirt` (tişört rengi) → `tp_*` (kıyafet) → `face` → `hs_*` (saç rengi) → `hat_*` → `gl_*`.
+- Renkle çarpılanlar gri tonlu: body, shirt, hs_*. Diğerleri kendi renginde.
+- Her katman yalnızca gövdenin önünde görünen pikselleri içerir; bu yüzden katmanlar birbirinin üstüne sorunsuz biner.
+- **Kendi PNG'ni koymak:** aynı ad ve aynı sheet düzeniyle `public/sprites/avatar3/` içine at; oyun otomatik kullanır.
+- **Yeni parça eklemek:** `tools/char3d.py` içine tanımla (hat/glasses/back/hair/top fonksiyonları), `gen_char3d.py` listesine ve `lib/avatarLayers.ts` listelerine ekle.
+
+Sırada (v28 planı): araçlar (4 yönlü), zemin/duvar karoları, eşyaların 4 yönlü sürümleri, at.
+
+---
+
+## 5. v28 — 4 yönlü araçlar (public/sprites/veh)
+
+Üretici: `python3 tools/gen_vehicle3d.py [ad]` (araç modelleri aynı dosyada). Araçlar: `car_red, car_blue, car_yellow (taksi), police, pickup, bus`.
+**Sheet:** 4 sütun (0 güneydoğu, 1 güneybatı, 2 kuzeybatı, 3 kuzeydoğu) x 1 satır, kare 480x360, araç merkezi (zemin) karede (240, 240). 1 birim = 4 px.
+Cadde 1 trafiği artık iki yönlü: şerit 8 güneydoğuya, şerit 7 kuzeybatıya akar ve doğru yöne bakan sprite çizilir (ayna yok). Kendi aracını eklemek için aynı ad/düzenle PNG koy; yeni tür için `lib/vehicles.ts` listesine ve `engine.ts` trafik listesine ekle.
+Park halindeki arabalar (yerleştirilebilir eşya) hâlâ kendi AI görsellerin; 4 yönlü araçlar şimdilik yalnız trafikte.
+
+---
+
+## 6. v29 — PNG zemin karoları ve duvarlar (public/sprites/tiles)
+
+Üretici: `python3 tools/gen_tiles.py [zemin|duvar|hepsi]` (numpy, scipy, Pillow). Dokular gri tonludur; oyun tema rengiyle çarpar (`lib/tiles.ts`), bu yüzden renk değişince PNG değişmesi gerekmez.
+- **Zemin:** `floor_<tür>.png`, türler: wood, sand, grass, brick, asphalt, soil, stone, marble, carpet, plain. 4 varyant yan yana (her biri 256x128 eşkenar dörtgen), dikişsiz; karoya göre varyant seçilir.
+- **Duvar:** `wall_<tür>.png`, türler: plaster, brick, wood, tile, metal, stone. 180x440 düz doku (bir kare uzunluğu x duvar yüksekliği), yatayda dikişsiz; taç silme, süpürgelik ve lambri dokunun içindedir.
+- Oda → duvar türü eşlemesi `wallKindFor` (lib/tiles.ts); zemin türü `tileStyle` (lib/draw.ts) içindeki `kind`.
+- Kendi dokunu koymak için aynı ad ve ölçüyle PNG'yi değiştir. Doku yüklenemezse eski kodla çizim otomatik devreye girer.
+
+---
+
+## 7. v30 — 4 yönlü süvari atı (public/sprites/horse)
+
+Üretici: `python3 tools/gen_horse3d.py` (~15 dk; at modeli aynı dosyada). İki sheet: `horse.png` (at, kareler: 0 duruş, 1–6 dörtnala) ve `rider_legs.png` (binicinin bacak+ayakkabısı).
+Düzen: 8 sütun x 4 satır (satır = yön: 0 güneydoğu, 1 güneybatı, 2 kuzeybatı, 3 kuzeydoğu), kare 320x304 px, 1 birim = 4 px, ayak noktası kare alt-ortasının 8 px üstü. Oyunda 1.2x büyütülür (`HORSE_K`, lib/horse.ts).
+Çizim sırası: at → binici bacakları → karakter katmanları (bacak/ayakkabı olmadan). Kendi at PNG'ni aynı adla koyarsan oyun onu kullanır; yüklenemezse eski vektör at çizilir.
+
+## 8. v31 — 4 yönlü 3D eşyalar
+- `tools/gen_furni3d.py` → `public/sprites/f3/<tür>.png` (4 sütun = rot 0..3) + `lib/furni3d.ts`.
+- Türler: bench, chair, sofa, lounger, tv, bookshelf, bed, logseat.
+- rot 2 ve 3 her zaman 3D çizilir; rot 0-1 yalnız Ayarlar > "3D eşyalar (tüm yönler)" açıkken.
+- `rotate_furni` bu türlerde 4 adım döner (schema.sql güncellendi, tekrar çalıştır).
+
+## 9. v32 — 15 eşya daha (toplam 23 tür, 4 yönlü)
+Yeni: beanbag, plant, lamp, streetlight, table, counter, casinotable, bin, umbrella, campfire, mannequin, surfboard, phone_booth, kiosk, ore_cart.
+- Üretim: `python3 tools/gen_furni3d.py <tür...>`; yeni tür için modeli ve `ITEMS` satırını ekle, türü `lib/constants.ts` `FURNI_DIRS` ve `supabase/schema.sql` rotate_furni listesine yaz.
+- Çok karolu büyük eşyalar (tezgâhlar, mağazalar, çiçeklik, otobüs durağı, pano) hâlâ eski PNG; sıradaki iş.

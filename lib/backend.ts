@@ -25,6 +25,7 @@ import {
   isFurniType,
   levelOf,
   FURNI_BY_TYPE,
+  FURNI_DIRS,
   ROLE_RANK,
   homeSlug,
   isHomeSlug,
@@ -793,7 +794,7 @@ function createDemoBackend(): Backend {
     const d = FURNI_BY_TYPE[type];
     const w = d.wTiles ?? 1;
     const h = d.hTiles ?? 1;
-    return rot === 1 ? { w: h, h: w } : { w, h };
+    return rot % 2 === 1 ? { w: h, h: w } : { w, h };
   };
   /** Çok kareli eşyalar dahil dikdörtgen kesişim kontrolü (sunucudaki _tile_free ile aynı mantık) */
   const tileFree = (list: FurniItem[], type: FurniType, gx: number, gy: number, rot = 0) => {
@@ -1001,7 +1002,7 @@ function createDemoBackend(): Backend {
       const item = list.find((f) => f.id === id);
       if (!item) throw new Error("Eşya bulunamadı.");
       if (p.role !== "admin" && slug !== homeSlug(p.username) && item.owner !== p.username) throw new Error("Bu eşya sana ait değil.");
-      const next = item.rot === 1 ? 0 : 1;
+      const next = (item.rot ?? 0) + 1 >= (FURNI_DIRS.includes(item.type) ? 4 : 2) ? 0 : (item.rot ?? 0) + 1;
       const r = resolveRoom(slug);
       const n = fp(item.type, next);
       if (r && (item.gx + n.w > (r.cols ?? 99) || item.gy + n.h > (r.rows ?? 99))) throw new Error("Döndürmek için yer yok.");

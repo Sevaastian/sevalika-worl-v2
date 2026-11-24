@@ -325,3 +325,19 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - Karakterler `CHAR_K=1.3` büyüdü; dünya yakınlaştırması 1.05 → 1.4 (mobil 0.85 → 1.05). Küçük odalar ekrana sığdığı kadar büyür.
 - Ayarlar `lib/iso.ts` başında. PNG yol haritası: `docs/SPRITE-REHBERI.md` bölüm 3.
 - Şema değişikliği yok; sadece yeniden deploy.
+
+## v27 — PNG karakter
+- Karakter 3D'den üretilmiş, 4 yönlü, yürüme (6 kare) + oturma kareli katmanlı PNG sistemine geçti (`public/sprites/avatar3`).
+- Saç (8), şapka (12), gözlük (7), sırt eşyası (5), üst kıyafet (6) hepsi PNG; NPC'ler de aynı sistemi kullanır.
+- Üretici araçlar: `tools/gen_char3d.py`. Ayrıntı: `docs/SPRITE-REHBERI.md` bölüm 4. Şema değişikliği yok.
+
+## v28 — Araçlar
+- Cadde 1 trafiği iki yönlü ve 4 yönlü PNG araçlarla (araba x2, taksi, polis, pikap, otobüs). `tools/gen_vehicle3d.py`, `docs/SPRITE-REHBERI.md` bölüm 5. Şema değişikliği yok.
+
+## v29 — Zemin ve duvar PNG
+- Zemin (10 tür x 4 varyant) ve duvar (6 tür) dokuları PNG, tema rengiyle boyanır. `tools/gen_tiles.py`, `lib/tiles.ts`, `docs/SPRITE-REHBERI.md` bölüm 6. Şema değişikliği yok.
+
+## v30 — Süvari atı
+- Süvari atı 4 yönlü PNG (dörtnala animasyonlu) ve binici bacaklarıyla. `tools/gen_horse3d.py`, `lib/horse.ts`, `docs/SPRITE-REHBERI.md` bölüm 7. Şema değişikliği yok.
+- v31: 4 yönlü 3D eşyalar (bench, chair, sofa, lounger, tv, bookshelf, bed, logseat). f3 ayarı, rot 0-3, schema rotate_furni.
+- v32: 15 yeni 4 yönlü 3D eşya (toplam 23): beanbag, plant, lamp, streetlight, table, counter, casinotable, bin, umbrella, campfire, mannequin, surfboard, phone_booth, kiosk, ore_cart.

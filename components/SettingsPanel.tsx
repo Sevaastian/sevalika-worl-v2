@@ -86,6 +86,7 @@ export function SettingsPanel(props: {
         <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Görüntü</div>
         <Row label="Düşük kalite modu" hint="Parçacık, kuş ve yönlü gölgeleri kapatır. Telefonda pil ve akıcılık için.">
           <Toggle on={s.low} onClick={() => props.onChange({ ...s, low: !s.low })} label="Düşük kalite" />
+          <Toggle on={s.f3d} onClick={() => props.onChange({ ...s, f3d: !s.f3d })} label="3D eşyalar (tüm yönler)" />
         </Row>
         <Row label="Katmanlı karakter" hint="Yeni PNG karakter çizimi (deneysel).">
           <Toggle on={props.layered} onClick={props.onToggleLayered} label="Katmanlı karakter" />
