@@ -32,7 +32,7 @@ export function setLayeredPref(v: boolean) {
 
 type Entry = { img: HTMLImageElement | null; status: "loading" | "ready" | "error" };
 const images = new Map<string, Entry>();
-const tinted = new Map<string, HTMLCanvasElement>();
+const tintedFrames = new Map<string, HTMLCanvasElement>();
 
 function load(src: string): HTMLImageElement | null {
   if (typeof window === "undefined") return null;
@@ -49,30 +49,6 @@ function load(src: string): HTMLImageElement | null {
   return e.status === "ready" ? e.img : null;
 }
 
-/** Rengi çarparak boyanmış sheet (önbellekli) */
-function tintedSheet(src: string, color: string | null): CanvasImageSource | null {
-  const img = load(src);
-  if (!img) return null;
-  if (!color) return img;
-  const key = `${src}|${color}`;
-  let c = tinted.get(key);
-  if (!c) {
-    c = document.createElement("canvas");
-    c.width = img.naturalWidth;
-    c.height = img.naturalHeight;
-    const g = c.getContext("2d");
-    if (!g) return img;
-    g.drawImage(img, 0, 0);
-    g.globalCompositeOperation = "multiply";
-    g.fillStyle = color;
-    g.fillRect(0, 0, c.width, c.height);
-    g.globalCompositeOperation = "destination-in";
-    g.drawImage(img, 0, 0);
-    tinted.set(key, c);
-  }
-  return c;
-}
-
 export interface LayerSpec {
   src: string;
   tint: string | null;
@@ -87,9 +63,34 @@ export function layersReady(specs: LayerSpec[]): boolean {
 
 /** frame: 0 duruş, 1-6 yürüyüş, 7 oturuş; dir: 0 GD, 1 GB, 2 KB, 3 KD */
 export function drawLayer(ctx: CanvasRenderingContext2D, spec: LayerSpec, frame: number, dir: number, ay: number) {
-  const sheet = tintedSheet(spec.src, spec.tint);
-  if (!sheet) return;
-  mipDraw(ctx, sheet, frame * LAYER_FRAME_W, dir * LAYER_FRAME_H, LAYER_FRAME_W, LAYER_FRAME_H, -LAYER_DRAW_W / 2, ay - LAYER_FEET, LAYER_DRAW_W, LAYER_DRAW_H);
+  const img = load(spec.src);
+  if (!img) return;
+  let src: CanvasImageSource = img;
+  let sx = frame * LAYER_FRAME_W;
+  let sy = dir * LAYER_FRAME_H;
+  if (spec.tint) {
+    // Renkli parçalar yalnız kullanılan kare için boyanır (tüm sheet'i boyamak yüzlerce MB bellek harcıyordu)
+    const key = `${spec.src}|${spec.tint}|${frame}|${dir}`;
+    let c = tintedFrames.get(key);
+    if (!c) {
+      c = document.createElement("canvas");
+      c.width = LAYER_FRAME_W;
+      c.height = LAYER_FRAME_H;
+      const g = c.getContext("2d");
+      if (!g) return;
+      g.drawImage(img, sx, sy, LAYER_FRAME_W, LAYER_FRAME_H, 0, 0, LAYER_FRAME_W, LAYER_FRAME_H);
+      g.globalCompositeOperation = "multiply";
+      g.fillStyle = spec.tint;
+      g.fillRect(0, 0, LAYER_FRAME_W, LAYER_FRAME_H);
+      g.globalCompositeOperation = "destination-in";
+      g.drawImage(img, sx, sy, LAYER_FRAME_W, LAYER_FRAME_H, 0, 0, LAYER_FRAME_W, LAYER_FRAME_H);
+      tintedFrames.set(key, c);
+    }
+    src = c;
+    sx = 0;
+    sy = 0;
+  }
+  mipDraw(ctx, src, sx, sy, LAYER_FRAME_W, LAYER_FRAME_H, -LAYER_DRAW_W / 2, ay - LAYER_FEET, LAYER_DRAW_W, LAYER_DRAW_H);
 }
 
 const KNOWN_HAIR = ["hs_short", "hs_long", "hs_spiky", "hs_bun", "hs_afro", "hs_mohawk", "hs_pony", "hs_curly"];

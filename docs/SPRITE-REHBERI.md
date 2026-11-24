@@ -134,3 +134,8 @@ Yeni: beanbag, plant, lamp, streetlight, table, counter, casinotable, bin, umbre
 Yeni: stall_red, stall_blue, flower_bed, bus_stop, billboard, clock_tower, fountain_big, food_truck.
 - Modelde z ekseni = wTiles, x ekseni = hTiles (45 birim/karo); çerçeve boyutu ≈ (w+h)*127+40 px genişlik.
 - Hâlâ eski PNG: mağazalar, casino barı, sahil kafesi, DJ, tiki bar, balıkçı kulübesi, maden girişi, mutfak, ambar, arabalar, ağaç/palmiye.
+
+## 11. v35 — bank büyüdü, bellek ve otomatik düşük kalite
+- Bank 3D modeli 1.3x büyütüldü (tools/gen_furni3d.py `SCALE`), oturma yüksekliği `SEAT_AY.bench = -5`.
+- Renkli karakter parçaları artık tüm sheet yerine yalnız kullanılan kare için boyanıyor (yüzlerce MB bellek tasarrufu).
+- Ortalama fps ~30'un altına düşerse oyun kendiliğinden düşük kaliteye geçer (parçacık yok, çözünürlük 1x).

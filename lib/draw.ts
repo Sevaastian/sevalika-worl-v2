@@ -2400,7 +2400,7 @@ function drawSeatedLegs(ctx: Ctx, ay: number, legColor: string, onFloor: boolean
   });
 }
 
-const SEAT_AY: Record<string, number> = { sofa: 1, bench: -1, chair: -9, logseat: 5, beanbag: 1, lounger: 0 };
+const SEAT_AY: Record<string, number> = { sofa: 1, bench: -5, chair: -9, logseat: 5, beanbag: 1, lounger: 0 };
 
 function drawAnimatedLegs(ctx: Ctx, ay: number, legColor: string, isMoving: boolean, time: number, width = 5) {
   const stride = isMoving ? Math.sin(time / 95) * 8 : 0;

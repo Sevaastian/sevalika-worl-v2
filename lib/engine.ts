@@ -102,11 +102,30 @@ export class GameEngine {
     const loop = (ts: number) => {
       const dt = this.lastTs ? Math.min(0.1, (ts - this.lastTs) / 1000) : 0;
       this.lastTs = ts;
+      this.watchPerf(ts);
       this.update(dt);
       this.render(ts);
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
+  }
+
+  /** Yavaş cihazlarda (ortalama < ~30 fps) düşük kaliteye otomatik geçer: parçacıklar kapanır, çözünürlük 1x olur. */
+  private perfN = 0;
+  private perfSum = 0;
+  private perfPrev = 0;
+  private perfStart = 0;
+  private watchPerf(ts: number) {
+    if (gfx.low || typeof window === "undefined") return;
+    if (!this.perfStart) this.perfStart = ts;
+    if (ts - this.perfStart < 4000) { this.perfPrev = ts; return; } // ısınma (yükleme/sprite çözme)
+    if (this.perfPrev) { this.perfSum += Math.min(250, ts - this.perfPrev); this.perfN++; }
+    this.perfPrev = ts;
+    if (this.perfN >= 150) {
+      if (this.perfSum / this.perfN > 34) gfx.low = true;
+      this.perfN = 0;
+      this.perfSum = 0;
+    }
   }
 
   stop() {
@@ -614,7 +633,7 @@ export class GameEngine {
     const parent = this.canvas.parentElement;
     const w = parent?.clientWidth || 900;
     const h = parent?.clientHeight || 600;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = gfx.low ? 1 : Math.min(2, window.devicePixelRatio || 1);
     if (w !== this.width || h !== this.height || this.canvas.width !== Math.round(w * dpr)) {
       this.width = w;
       this.height = h;

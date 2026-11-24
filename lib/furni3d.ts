@@ -1,6 +1,6 @@
 // Otomatik üretildi: tools/gen_furni3d.py. 4 yönlü 3D eşya sheet ölçüleri (kare px).
 export const FURNI3D: Record<string, { fw: number; fh: number; feet: number }> = {
-  bench: { fw: 200, fh: 240, feet: 170 },
+  bench: { fw: 260, fh: 280, feet: 190 },
   chair: { fw: 160, fh: 220, feet: 160 },
   sofa: { fw: 200, fh: 220, feet: 160 },
   lounger: { fw: 300, fh: 280, feet: 200 },

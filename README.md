@@ -343,3 +343,4 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - v32: 15 yeni 4 yönlü 3D eşya (toplam 23): beanbag, plant, lamp, streetlight, table, counter, casinotable, bin, umbrella, campfire, mannequin, surfboard, phone_booth, kiosk, ore_cart.
 - v33: 8 çok karolu 4 yönlü 3D eşya (tezgâhlar, çiçeklik, durak, pano, saat kulesi, büyük çeşme, yemek aracı); toplam 31 tür.
 - v34 (performans): ekran dışı karo/duvar/eşya/araç çizilmiyor (lib/view.ts), büyük sprite sheet'leri için küçültülmüş kopya + kare önbelleği (lib/mip.ts). Kare başına JS çizim süresi ~2 ms.
+- v35: bank 1.3x, karakter boyama kare bazlı (bellek), yavaş cihazda otomatik düşük kalite.

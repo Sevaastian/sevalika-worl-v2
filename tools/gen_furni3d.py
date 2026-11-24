@@ -355,7 +355,7 @@ def food_truck():
 
 # tür -> (model, fw, fh, feet_y, wTiles, hTiles)
 ITEMS = {
-    "bench": (bench, 200, 240, 170, 1, 1),
+    "bench": (bench, 260, 280, 190, 1, 1),
     "chair": (chair, 160, 220, 160, 1, 1),
     "sofa": (sofa, 200, 220, 160, 1, 1),
     "lounger": (lounger, 300, 280, 200, 1, 1),
@@ -388,13 +388,29 @@ ITEMS = {
     "food_truck": (food_truck, 700, 480, 350, 3, 2),
 }
 
+SCALE = {"bench": 1.3}
+
+def _sc(v, k):
+    if isinstance(v, (tuple, list)): return type(v)(_sc(x, k) for x in v)
+    return v * k if isinstance(v, (int, float)) else v
+
+def scaled(prims, k):
+    out = []
+    for p in prims:
+        q = P.__new__(P); q.__dict__ = dict(p.__dict__)
+        q.c = p.c * k; q.size = _sc(p.size, k); q.rad = p.rad * k
+        if p.cut is not None: q.cut = (p.cut[0], p.cut[1] * k)
+        if p.stripe is not None: q.stripe = (p.stripe[0], p.stripe[1] * k, p.stripe[2])
+        out.append(q)
+    return out
+
 def gen(name):
     fn, fw, fh, feet, wt, ht = ITEMS[name]
     r3d.FW, r3d.FH, r3d.FEET_PX, r3d.ELEV = fw, fh, feet, math.radians(30)
     sheet = Image.new("RGBA", (fw * 4, fh))
     for d, yaw in enumerate(DIRS_YAW):
         cam = r3d.Cam(yaw)
-        rgb, al, dp = render(fn(), cam)
+        rgb, al, dp = render(scaled(fn(), SCALE[name]) if name in SCALE else fn(), cam)
         sheet.paste(to_image(downsample(outline(rgb, al, dp), al)), (d * fw, 0))
     sheet.save(os.path.join(OUT, name + ".png"), optimize=True)
     print("ok", name, flush=True)
