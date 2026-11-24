@@ -1,4 +1,6 @@
+import { mipDraw } from "./mip";
 import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile, PARTI_PODIUM } from "./constants";
+import { setView, offscreen } from "./view";
 import { drawAvatar, drawBubble, drawFlag, drawFurni, drawHainBody, drawHainMark, drawHainWall, drawPet, drawPodiumBlock, podiumLift, drawRock, drawRoom, drawRug, roomRocks, roomWalls } from "./draw";
 import { VEH_FW, VEH_FH, VEH_FEET, vehicleSheet } from "./vehicles";
 import { CHAR_K, WORLD_ZOOM_LARGE, WORLD_ZOOM_LARGE_MOBILE, getLayout, gridToScreen, inGrid, screenToGrid, type Layout } from "./iso";
@@ -753,10 +755,17 @@ export class GameEngine {
 
     ctx.fillStyle = "#1f2a44";
     ctx.fillRect(0, 0, width, height);
+    setView(width, height);
 
     drawRoom(ctx, l, this.room.slug, this.room.theme, this.room.portals, this.hover, this.buildMode ? "rgba(250, 204, 21, 0.55)" : "rgba(56, 189, 248, 0.35)", time);
 
-    for (const f of this.furni) if (FURNI_BY_TYPE[f.type]?.floor) drawRug(ctx, f, l);
+    const CM = 380 * l.scale; // büyük yapılar için geniş kenar payı
+    for (const f of this.furni) {
+      if (!FURNI_BY_TYPE[f.type]?.floor) continue;
+      const q = gridToScreen(f.gx, f.gy, l);
+      if (offscreen(q.sx, q.sy, CM)) continue;
+      drawRug(ctx, f, l);
+    }
 
     type Renderable = { depth: number; draw: () => void };
     const items: Renderable[] = [];
@@ -768,9 +777,13 @@ export class GameEngine {
       // eşya en arka köşesine göre sıralanır, böylece kapladığı karelerdeki karakter hep önde çizilir.
       const passable = FURNI_BY_TYPE[f.type]?.blocks === false;
       const depth = passable ? f.gx + f.gy - 0.3 : f.gx + (wTiles - 1) / 2 + (f.gy + (hTiles - 1) / 2);
+      const fc = gridToScreen(f.gx + wTiles / 2, f.gy + hTiles / 2, l);
+      if (offscreen(fc.sx, fc.sy, CM)) continue;
       items.push({ depth, draw: () => drawFurni(ctx, f, l, time) });
     }
     for (const c of this.traffic) {
+      const tc = gridToScreen(c.x + 0.5, c.lane + 0.5, l);
+      if (offscreen(tc.sx, tc.sy, CM)) continue;
       items.push({
         depth: c.x + c.lane + 1.2,
         draw: () => {
@@ -781,7 +794,7 @@ export class GameEngine {
           const { sx, sy } = gridToScreen(c.x + 0.5, c.lane + 0.5, l);
           const w = (VEH_FW / 4) * l.scale;
           const h = (VEH_FH / 4) * l.scale;
-          ctx.drawImage(img, col * VEH_FW, 0, VEH_FW, VEH_FH, sx - w / 2, sy - (VEH_FEET / 4) * l.scale, w, h);
+          mipDraw(ctx, img, col * VEH_FW, 0, VEH_FW, VEH_FH, sx - w / 2, sy - (VEH_FEET / 4) * l.scale, w, h);
         },
       });
     }

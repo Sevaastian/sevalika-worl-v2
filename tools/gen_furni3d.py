@@ -232,6 +232,127 @@ def ore_cart():
                    hexc(["#94a3b8", "#fbbf24", "#60a5fa", "#a78bfa"][i % 4]), spec=.3))
     return o
 
+
+# --- v33: çok karolu büyük eşyalar. Model z ekseni = wTiles (45 birim/karo), x ekseni = hTiles. ---
+def _stall(col, col2):
+    wd = hexc("#8a5a2b"); wl = hexc("#a9703a")
+    o0 = [P("box", (-6, 10, 0), (14, 10, 40.0), wd, rad=.8), P("box", (-6, 20.6, 0), (15.5, 1.0, 41.5), wl, rad=.5),
+         P("box", (8.5, 16, 0), (1.0, 16, 41.0), wd * .8)]  # arka duvar (ön +x, arka duvar -x yönünde değil: x=+ ürün sergisi)
+    o = [P("box", (-6, 10, 0), (14, 10, 40.0), wd, rad=.8), P("box", (-6, 20.6, 0), (15.5, 1.0, 41.5), wl, rad=.5),
+         P("box", (17, 24, 0), (1.0, 24, 41.0), wd * .8, rad=.4)]
+    rng = np.random.RandomState(11)
+    cols = ["#ef4444", "#facc15", "#22c55e", "#f97316", "#a855f7"]
+    for i in range(5):
+        z = -32 + i * 16
+        o.append(P("box", (-6, 23.2, z), (11, 2.0, 7.0), hexc("#c08a4a"), rad=.5))
+        for j in range(6):
+            o.append(P("ell", (-6 + rng.uniform(-7, 7), 26.6 + rng.uniform(0, 1.5), z + rng.uniform(-4.5, 4.5)), (2.6, 2.6, 2.6), hexc(cols[(i + j) % 5]), spec=.35))
+    for x in (-16.5, 16.5):
+        for z in (-40.5, 40.5):
+            o.append(P("box", (x, 25, z), (.9, 25, .9), wl, rad=.3))
+    o.append(P("box", (0.5, 51.0, 0), (21.5, 1.0, 44.5), col, stripe=(2, 11.0, col2), R=rot(0, 0, 9), rad=.4))
+    o.append(P("box", (-16.0, 44.0, 0), (1.0, 3.0, 44.5), col, stripe=(2, 11.0, col2)))
+    return o
+
+def stall_red(): return _stall(hexc("#dc2626"), G(.97))
+def stall_blue(): return _stall(hexc("#2563eb"), G(.97))
+
+def flower_bed():
+    br = hexc("#a8623a"); o = [P("box", (0, 4.5, 0), (12.5, 4.5, 60.0), br, rad=1.0), P("box", (0, 9.2, 0), (13.6, .9, 61.0), hexc("#c27a4c"), rad=.5),
+                               P("box", (0, 9.2, 0), (11.2, .7, 58.0), hexc("#3f2a1a"))]
+    rng = np.random.RandomState(4); cols = ["#f472b6", "#fde047", "#fb7185", "#c084fc", "#fb923c", "#ffffff"]
+    for i in range(34):
+        z = rng.uniform(-55, 55); x = rng.uniform(-9, 9); h = rng.uniform(3, 8)
+        o.append(P("cap", (0, 0, 0), ((x, 10, z), (x, 10 + h, z), .45), hexc("#22c55e")))
+        o.append(P("ell", (x, 11 + h, z), (2.4, 1.8, 2.4), hexc(cols[rng.randint(6)]), spec=.2))
+    for i in range(10):
+        o.append(P("ell", (rng.uniform(-9, 9), 11.5, rng.uniform(-55, 55)), (3.4, 2.6, 3.4), hexc("#1f9d55")))
+    return o
+
+def bus_stop():
+    d = hexc("#334155"); gl = hexc("#9fd3ef")
+    o = [P("box", (0, 48, 0), (13, 1.3, 63), d, rad=.6), P("box", (0, 50.4, 0), (12, 1.0, 62), hexc("#2563eb"), rad=.4)]
+    for z in (-60.5, 60.5):
+        o.append(P("box", (-11, 24, z), (.9, 24, .9), d))
+    for z in (-60.5, -20, 20, 60.5):
+        o.append(P("box", (-12, 24, z), (.7, 24, .7), d))
+    o.append(P("box", (-12, 27, 0), (.5, 21, 59), gl, spec=.6))
+    o.append(P("box", (-5, 13.5, 0), (5.5, .9, 36), hexc("#b9772c"), rad=.4)); o.append(P("box", (-9.5, 18.5, 0), (.9, 4, 36), hexc("#b9772c"), rad=.4))
+    for z in (-30, 30):
+        o.append(P("box", (-5, 6.5, z), (4.5, 6.5, 1.0), d))
+    o.append(P("box", (10, 58, 48), (.6, 8, 8), hexc("#facc15"), emissive=False)); o.append(P("cap", (0, 0, 0), ((10, 8, 55), (10, 58, 55), .9), d))
+    o.append(P("box", (12.8, 62, 55), (.5, 6, 6), hexc("#2563eb")))
+    o.append(P("box", (12.3, 46, -1), (.4, 3.5, 20), hexc("#fef08a"), emissive=True))
+    return o
+
+def billboard():
+    d = hexc("#334155")
+    o = [P("box", (0, 28, -36), (1.8, 28, 1.8), d), P("box", (0, 28, 36), (1.8, 28, 1.8), d),
+         P("box", (0, 66, 0), (2.4, 20, 61), hexc("#1f1b3a"), rad=1.0),
+         P("box", (2.6, 66, 0), (.6, 17, 58), hexc("#2a2552"))]
+    cols = ["#f97316", "#facc15", "#22c55e", "#38bdf8", "#a855f7", "#ec4899"]
+    for i, c in enumerate(cols):
+        o.append(P("box", (3.3, 52 + (i % 3) * 12, -40 + i * 16), (.5, 4.5, 6.5), hexc(c), emissive=True))
+    o.append(P("box", (3.3, 74, 0), (.5, 5, 28), hexc("#fef08a"), emissive=True))
+    o.append(P("box", (3, 90, 0), (2, .8, 60), d))
+    return o
+
+def clock_tower():
+    st = hexc("#c9b38a"); sd = hexc("#a8946a"); rf = hexc("#b83b25")
+    o = [P("box", (0, 6, 0), (34, 6, 34), sd, rad=1.4), P("box", (0, 18, 0), (28, 6, 28), st, rad=1.2),
+         P("box", (0, 70, 0), (17, 52, 17), st, rad=1.0), P("box", (0, 124, 0), (21, 3, 21), sd, rad=1.0),
+         P("box", (0, 142, 0), (17.5, 15, 17.5), st, rad=1.0), P("box", (0, 158, 0), (20.5, 2.4, 20.5), sd, rad=.8),
+         P("cone", (0, 160, 0), (21, 1.2, 40), rf, spec=.1), P("cap", (0, 0, 0), ((0, 198, 0), (0, 212, 0), .9), hexc("#facc15"), spec=.6),
+         P("ell", (0, 200, 0), (3.2, 3.2, 3.2), hexc("#facc15"), spec=.6)]
+    for x, z, R in ((17.9, 0, rot(0, 0, 90)), (-17.9, 0, rot(0, 0, 90)), (0, 17.9, rot(90, 0, 0)), (0, -17.9, rot(90, 0, 0))):
+        o += [P("cyl", (x, 142, z), (13, .5), G(.97), R=R, rad=.3), P("torus", (x, 142, z), (13.2, .8), hexc("#8a6a2e"), R=R, spec=.5)]
+        for k in range(4):
+            a = math.radians(k * 90)
+            c1 = (x, 142 + math.cos(a) * 10.5, z + math.sin(a) * 10.5) if abs(x) > 1 else (x + math.sin(a) * 10.5, 142 + math.cos(a) * 10.5, z)
+            o.append(P("box", c1, (.6, .6, .6) if False else (.9, .9, .9), G(.15)))
+        if abs(x) > 1:
+            sg = 1 if x > 0 else -1
+            o.append(P("box", (x + sg * .8, 148, z), (.4, 7.2, .5), G(.1))); o.append(P("box", (x + sg * .8, 142, z + 3), (.4, .5, 4.6), G(.1)))
+        else:
+            sg = 1 if z > 0 else -1
+            o.append(P("box", (x, 148, z + sg * .8), (.5, 7.2, .4), G(.1))); o.append(P("box", (x + 3, 142, z + sg * .8), (4.6, .5, .4), G(.1)))
+    for x, z in ((-16, -16), (16, -16), (-16, 16), (16, 16)):
+        o.append(P("cone", (x * 1.05, 160, z * 1.05), (3.2, .4, 9.0), rf))
+    return o
+
+def fountain_big():
+    st = hexc("#cdd1d6"); sd = hexc("#9aa1aa"); wt = hexc("#4cc3ee")
+    o = [P("cyl", (0, 5, 0), (62, 5), st, rad=1.2), P("torus", (0, 10.5, 0), (61, 3.2), st, spec=.1),
+         P("cyl", (0, 8.2, 0), (58, .9), wt, spec=.9),
+         P("cyl", (0, 17, 0), (13, 8), sd, rad=1.2), P("cyl", (0, 28, 0), (24, 2.2), st, rad=1.6), P("torus", (0, 29.5, 0), (24, 1.8), st),
+         P("cyl", (0, 29.5, 0), (22, .6), wt, spec=.9),
+         P("cyl", (0, 38, 0), (6, 8), sd, rad=1.0), P("cyl", (0, 47, 0), (15, 1.8), st, rad=1.4), P("torus", (0, 48.2, 0), (15, 1.3), st),
+         P("cyl", (0, 48.5, 0), (13.5, .5), wt, spec=.9),
+         P("cap", (0, 0, 0), ((0, 48, 0), (0, 64, 0), 1.6), hexc("#bdeaff"), emissive=True),
+         P("ell", (0, 66, 0), (3.2, 3.8, 3.2), hexc("#d3f1ff"), emissive=True)]
+    for k in range(8):
+        a = math.radians(k * 45)
+        o.append(P("cap", (0, 0, 0), ((math.sin(a) * 6, 49, math.cos(a) * 6), (math.sin(a) * 16, 40, math.cos(a) * 16), .8), hexc("#bdeaff"), emissive=True))
+        o.append(P("cap", (0, 0, 0), ((math.sin(a) * 16, 40, math.cos(a) * 16), (math.sin(a) * 22.5, 30.6, math.cos(a) * 22.5), .8), hexc("#bdeaff"), emissive=True))
+    for k in range(10):
+        a = math.radians(k * 36 + 18)
+        o.append(P("cap", (0, 0, 0), ((math.sin(a) * 18, 30, math.cos(a) * 18), (math.sin(a) * 38, 22, math.cos(a) * 38), .8), hexc("#bdeaff"), emissive=True))
+        o.append(P("cap", (0, 0, 0), ((math.sin(a) * 38, 22, math.cos(a) * 38), (math.sin(a) * 52, 9.5, math.cos(a) * 52), .8), hexc("#bdeaff"), emissive=True))
+    return o
+
+def food_truck():
+    c = hexc("#f59e0b"); w = hexc("#fafafa"); d = G(.16)
+    o = [P("box", (0, 22, -14), (21, 18, 60.0), c, rad=2.0), P("box", (0, 17, 47), (19.5, 12, 16.0), hexc("#d97706"), rad=2.0),
+         P("box", (0, 33, 52.0), (17.5, 8, 9.0), hexc("#9fd3ef"), spec=.6, rad=1.0), P("box", (0, 41.5, -14), (21.5, 1.0, 60.5), w, rad=.5),
+         P("box", (0, 3.6, 0), (22, 3.2, 70.0), d, rad=1.0)]
+    for z in (-42, 46):
+        for x in (-21.5, 21.5):
+            o += [P("cyl", (x, 7.5, z), (8.0, 2.6), G(.07), R=rot(0, 0, 90), rad=.8), P("cyl", (x + (1.6 if x > 0 else -1.6), 7.5, z), (4.5, 1.0), G(.7), R=rot(0, 0, 90), spec=.6)]
+    o += [P("box", (21.2, 28, -12), (.7, 7.5, 24), hexc("#111827")), P("box", (24.0, 38, -12), (3.2, 1.0, 26), hexc("#dc2626"), stripe=(2, 8, w), R=rot(0, 0, -18)),
+          P("box", (23.5, 23.2, -12), (3.4, .7, 25), w, rad=.4),
+          P("box", (21.2, 30, -45), (.5, 8, 8), hexc("#fde047"), emissive=True), P("ell", (-8, 44.5, -30), (5, 2.0, 5), G(.7))]
+    return o
+
 # tür -> (model, fw, fh, feet_y, wTiles, hTiles)
 ITEMS = {
     "bench": (bench, 200, 240, 170, 1, 1),
@@ -257,6 +378,14 @@ ITEMS = {
     "phone_booth": (phone_booth, 140, 300, 220, 1, 1),
     "kiosk": (kiosk, 200, 300, 220, 1, 1),
     "ore_cart": (ore_cart, 180, 200, 150, 1, 1),
+    "stall_red": (stall_red, 520, 510, 360, 2, 1),
+    "stall_blue": (stall_blue, 520, 510, 360, 2, 1),
+    "flower_bed": (flower_bed, 580, 280, 150, 3, 1),
+    "bus_stop": (bus_stop, 580, 500, 370, 3, 1),
+    "billboard": (billboard, 580, 560, 420, 3, 1),
+    "clock_tower": (clock_tower, 540, 940, 770, 2, 2),
+    "fountain_big": (fountain_big, 820, 480, 300, 3, 3),
+    "food_truck": (food_truck, 700, 480, 350, 3, 2),
 }
 
 def gen(name):

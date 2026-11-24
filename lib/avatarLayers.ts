@@ -1,3 +1,4 @@
+import { mipDraw } from "./mip";
 /**
  * Katmanlı karakter sistemi (v27: 3D'den üretilmiş, 4 yönlü).
  * public/sprites/avatar3/ altındaki PNG sheet'leri üst üste çizilir:
@@ -88,7 +89,7 @@ export function layersReady(specs: LayerSpec[]): boolean {
 export function drawLayer(ctx: CanvasRenderingContext2D, spec: LayerSpec, frame: number, dir: number, ay: number) {
   const sheet = tintedSheet(spec.src, spec.tint);
   if (!sheet) return;
-  ctx.drawImage(sheet, frame * LAYER_FRAME_W, dir * LAYER_FRAME_H, LAYER_FRAME_W, LAYER_FRAME_H, -LAYER_DRAW_W / 2, ay - LAYER_FEET, LAYER_DRAW_W, LAYER_DRAW_H);
+  mipDraw(ctx, sheet, frame * LAYER_FRAME_W, dir * LAYER_FRAME_H, LAYER_FRAME_W, LAYER_FRAME_H, -LAYER_DRAW_W / 2, ay - LAYER_FEET, LAYER_DRAW_W, LAYER_DRAW_H);
 }
 
 const KNOWN_HAIR = ["hs_short", "hs_long", "hs_spiky", "hs_bun", "hs_afro", "hs_mohawk", "hs_pony", "hs_curly"];

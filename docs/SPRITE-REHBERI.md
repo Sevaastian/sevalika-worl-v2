@@ -129,3 +129,8 @@ Düzen: 8 sütun x 4 satır (satır = yön: 0 güneydoğu, 1 güneybatı, 2 kuze
 Yeni: beanbag, plant, lamp, streetlight, table, counter, casinotable, bin, umbrella, campfire, mannequin, surfboard, phone_booth, kiosk, ore_cart.
 - Üretim: `python3 tools/gen_furni3d.py <tür...>`; yeni tür için modeli ve `ITEMS` satırını ekle, türü `lib/constants.ts` `FURNI_DIRS` ve `supabase/schema.sql` rotate_furni listesine yaz.
 - Çok karolu büyük eşyalar (tezgâhlar, mağazalar, çiçeklik, otobüs durağı, pano) hâlâ eski PNG; sıradaki iş.
+
+## 10. v33 — çok karolu büyük eşyalar (toplam 31 tür)
+Yeni: stall_red, stall_blue, flower_bed, bus_stop, billboard, clock_tower, fountain_big, food_truck.
+- Modelde z ekseni = wTiles, x ekseni = hTiles (45 birim/karo); çerçeve boyutu ≈ (w+h)*127+40 px genişlik.
+- Hâlâ eski PNG: mağazalar, casino barı, sahil kafesi, DJ, tiki bar, balıkçı kulübesi, maden girişi, mutfak, ambar, arabalar, ağaç/palmiye.

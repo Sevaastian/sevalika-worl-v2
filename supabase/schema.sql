@@ -527,7 +527,7 @@ begin
     raise exception 'Bu eşya sana ait değil.';
   end if;
   -- v31: 4 yönlü eşyalar (rot 0-3) dört adımda döner; diğerleri iki adımda
-  new_rot := (coalesce((item->>'rot')::int, 0) + 1) % case when item->>'type' in ('bench','chair','sofa','lounger','tv','bookshelf','bed','logseat','beanbag','plant','lamp','streetlight','table','counter','casinotable','bin','umbrella','campfire','mannequin','surfboard','phone_booth','kiosk','ore_cart') then 4 else 2 end;
+  new_rot := (coalesce((item->>'rot')::int, 0) + 1) % case when item->>'type' in ('bench','chair','sofa','lounger','tv','bookshelf','bed','logseat','beanbag','plant','lamp','streetlight','table','counter','casinotable','bin','umbrella','campfire','mannequin','surfboard','phone_booth','kiosk','ore_cart','stall_red','stall_blue','flower_bed','bus_stop','billboard','clock_tower','fountain_big','food_truck') then 4 else 2 end;
   select coalesce(jsonb_agg(f), '[]'::jsonb) into rest from jsonb_array_elements(r.furni) f where f->>'id' <> p_id;
   perform public._check_place(p_room, rest, item->>'type', (item->>'gx')::int, (item->>'gy')::int, new_rot);
   update public.rooms

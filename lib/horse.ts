@@ -1,3 +1,4 @@
+import { mipDraw } from "./mip";
 /** 4 yönlü süvari atı (tools/gen_horse3d.py): horse.png + rider_legs.png, 8 sütun x 4 satır, kare 320x304. */
 export const HORSE_FW = 320;
 export const HORSE_FH = 304;
@@ -24,7 +25,7 @@ export function drawHorseSprite(ctx: CanvasRenderingContext2D, frame: number, di
   if (!img) return false;
   ctx.save();
   if (flip === -1) ctx.scale(-1, 1); // dışarıdaki yatay çevirmeyi geri al (sheet 4 yönlü)
-  ctx.drawImage(img, frame * HORSE_FW, dir * HORSE_FH, HORSE_FW, HORSE_FH, -HORSE_DRAW_W / 2, -HORSE_FEET, HORSE_DRAW_W, HORSE_DRAW_H);
+  mipDraw(ctx, img, frame * HORSE_FW, dir * HORSE_FH, HORSE_FW, HORSE_FH, -HORSE_DRAW_W / 2, -HORSE_FEET, HORSE_DRAW_W, HORSE_DRAW_H);
   ctx.restore();
   return true;
 }

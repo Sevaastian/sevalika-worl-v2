@@ -1,3 +1,4 @@
+import { mipDraw } from "./mip";
 import { lighting, silhouette } from "./ambience";
 import { gfx } from "./settings";
 import { bodyLayers, drawLayer, hasLayeredTop, hasLayeredHat, hasLayeredGlasses, hasLayeredBack, layersReady } from "./avatarLayers";
@@ -7,6 +8,7 @@ import { CHAR_K, getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
 import { drawHorseSprite } from "./horse";
 import { f3Frame } from "./f3";
+import { offscreen } from "./view";
 import { drawFloorTex, drawWallTex, isFloorKind, wallKindFor } from "./tiles";
 import type { FurniItem, NpcKind, Player, Portal, RoomTheme } from "./types";
 
@@ -1257,6 +1259,7 @@ export function drawRoom(
   for (let gx = 0; gx < cols; gx++) {
     for (let gy = 0; gy < rows; gy++) {
       const { sx, sy } = gridToScreen(gx, gy, l);
+      if (offscreen(sx, sy, 60 * l.scale)) continue;
       tilePath(ctx, sx, sy, l);
       const isHover = hover?.gx === gx && hover?.gy === gy;
 
@@ -1581,7 +1584,7 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
         ctx.restore();
       }
     }
-    ctx.drawImage(f3.canvas, c.sx - w / 2, c.sy - fy, w, h);
+    mipDraw(ctx, f3.canvas, 0, 0, f3.fw, f3.fh, c.sx - w / 2, c.sy - fy, w, h);
     return;
   }
 

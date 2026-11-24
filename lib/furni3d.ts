@@ -23,4 +23,12 @@ export const FURNI3D: Record<string, { fw: number; fh: number; feet: number }> =
   phone_booth: { fw: 140, fh: 300, feet: 220 },
   kiosk: { fw: 200, fh: 300, feet: 220 },
   ore_cart: { fw: 180, fh: 200, feet: 150 },
+  stall_red: { fw: 520, fh: 510, feet: 360 },
+  stall_blue: { fw: 520, fh: 510, feet: 360 },
+  flower_bed: { fw: 580, fh: 280, feet: 150 },
+  bus_stop: { fw: 580, fh: 500, feet: 370 },
+  billboard: { fw: 580, fh: 560, feet: 420 },
+  clock_tower: { fw: 540, fh: 940, feet: 770 },
+  fountain_big: { fw: 820, fh: 480, feet: 300 },
+  food_truck: { fw: 700, fh: 480, feet: 350 },
 };

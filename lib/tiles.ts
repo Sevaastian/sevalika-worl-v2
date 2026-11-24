@@ -1,3 +1,5 @@
+import { mipDraw } from "./mip";
+import { offscreen } from "./view";
 /**
  * PNG zemin ve duvar dokuları (tools/gen_tiles.py üretir, public/sprites/tiles).
  * Gri tonlu dokular tema rengiyle çarpılır; renkli kopyalar önbellekte tutulur.
@@ -57,7 +59,7 @@ export function drawFloorTex(ctx: CanvasRenderingContext2D, kind: string, color:
   if (!im) return false;
   const v = ((variant % TILE_VARIANTS) + TILE_VARIANTS) % TILE_VARIANTS;
   const c = tint(`f|${kind}|${color}|${v}`, im, v * TILE_W, 0, TILE_W, TILE_H, color);
-  ctx.drawImage(c, sx - tileW / 2 - 0.4, sy - 0.2, tileW + 0.8, tileH + 0.4);
+  mipDraw(ctx, c, 0, 0, c.width, c.height, sx - tileW / 2 - 0.4, sy - 0.2, tileW + 0.8, tileH + 0.4);
   return true;
 }
 
@@ -80,6 +82,7 @@ export function drawWallTex(
   for (let i = 0; i < count; i++) {
     const x0 = a.sx + dx * i;
     const y0 = a.sy + dy * i - wallH;
+    if (offscreen(x0 + dx / 2, y0 + wallH / 2, wallH + Math.abs(dx))) continue;
     ctx.save();
     // doku (0..W, 0..H) → paralelkenar
     ctx.transform(dx / WALL_W, dy / WALL_W, 0, wallH / WALL_H, x0, y0);
