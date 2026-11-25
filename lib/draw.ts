@@ -1,3 +1,4 @@
+import { vehicleSheet, VEH_FW, VEH_FH, VEH_FEET } from "./vehicles";
 import { mipDraw } from "./mip";
 import { lighting, silhouette } from "./ambience";
 import { gfx } from "./settings";
@@ -9,7 +10,7 @@ import { FURNI_SPRITES, sprites } from "./sprites";
 import { drawHorseSprite } from "./horse";
 import { f3Frame } from "./f3";
 import { offscreen } from "./view";
-import { drawFloorTex, drawWallTex, isFloorKind, wallKindFor } from "./tiles";
+import { drawSignPlate, drawFloorTex, drawWallTex, isFloorKind, wallKindFor } from "./tiles";
 import type { FurniItem, NpcKind, Player, Portal, RoomTheme } from "./types";
 
 type Ctx = CanvasRenderingContext2D;
@@ -136,15 +137,20 @@ function drawRightWallSign(ctx: Ctx, l: Layout, gxStart: number, gxEnd: number, 
   ctx.translate(midX, midY);
   ctx.transform(1, 0.5, 0, 1, 0, 0);
   const tw = Math.max(76, (gxEnd - gxStart) * 22) * l.scale;
-  const th = 19 * l.scale;
-  ctx.fillStyle = bg;
-  ctx.beginPath();
-  ctx.roundRect(-tw / 2, -th / 2, tw, th, 4 * l.scale);
-  ctx.fill();
-  ctx.strokeStyle = border;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  const th = 25 * l.scale;
+  if (!drawSignPlate(ctx, bg, border, tw, th)) {
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(-tw / 2, -th / 2, tw, th, 4 * l.scale);
+    ctx.fill();
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
   ctx.font = `900 ${Math.max(8, 9.5 * l.scale)}px sans-serif`;
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 2 * l.scale;
+  ctx.shadowOffsetY = 1 * l.scale;
   ctx.fillStyle = "#ffffff";
   centerText(ctx, title, 0, 3.5 * l.scale);
   ctx.restore();
@@ -160,15 +166,20 @@ function drawLeftWallSign(ctx: Ctx, l: Layout, gyStart: number, gyEnd: number, t
   ctx.translate(midX, midY);
   ctx.transform(1, -0.5, 0, 1, 0, 0);
   const tw = Math.max(74, (gyEnd - gyStart) * 22) * l.scale;
-  const th = 18 * l.scale;
-  ctx.fillStyle = bg;
-  ctx.beginPath();
-  ctx.roundRect(-tw / 2, -th / 2, tw, th, 4 * l.scale);
-  ctx.fill();
-  ctx.strokeStyle = border;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  const th = 25 * l.scale;
+  if (!drawSignPlate(ctx, bg, border, tw, th)) {
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(-tw / 2, -th / 2, tw, th, 4 * l.scale);
+    ctx.fill();
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
   ctx.font = `900 ${Math.max(8, 9 * l.scale)}px sans-serif`;
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 2 * l.scale;
+  ctx.shadowOffsetY = 1 * l.scale;
   ctx.fillStyle = "#ffffff";
   centerText(ctx, title, 0, 3.5 * l.scale);
   ctx.restore();
@@ -208,8 +219,11 @@ function drawStreetFacades(ctx: Ctx, l: Layout, time: number) {
     ctx.lineTo(p2.sx, p2.sy - bH);
     ctx.lineTo(p1.sx, p1.sy - bH);
     ctx.closePath();
-    ctx.fillStyle = wallColor;
-    ctx.fill();
+    const shopTex = drawWallTex(ctx, "shop", wallColor, p1, p2, bH, Math.max(1, Math.round(gxEnd - gxStart)));
+    if (!shopTex) {
+      ctx.fillStyle = wallColor;
+      ctx.fill();
+    }
     ctx.strokeStyle = "#0f172a";
     ctx.lineWidth = 1.5;
     ctx.stroke();
@@ -221,17 +235,35 @@ function drawStreetFacades(ctx: Ctx, l: Layout, time: number) {
     const winBot = 14 * l.scale;
     const winTop = 58 * l.scale;
 
-    ctx.beginPath();
-    ctx.moveTo(w1x, w1y - winBot);
-    ctx.lineTo(w2x, w2y - winBot);
-    ctx.lineTo(w2x, w2y - winTop);
-    ctx.lineTo(w1x, w1y - winTop);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(253, 224, 71, 0.22)";
-    ctx.fill();
-    ctx.strokeStyle = "#f8fafc";
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
+    if (shopTex) {
+      // PNG vitrin camlarının içine sıcak ışık (her karoda iki cam)
+      const n = Math.max(1, Math.round(gxEnd - gxStart));
+      const dx = (p2.sx - p1.sx) / n, dy = (p2.sy - p1.sy) / n;
+      ctx.fillStyle = "rgba(253, 224, 71, 0.20)";
+      for (let i = 0; i < n; i++) {
+        for (const [a0, a1] of [[12, 84], [96, 168]]) {
+          const xa = p1.sx + dx * (i + a0 / 180), ya = p1.sy + dy * (i + a0 / 180);
+          const xb = p1.sx + dx * (i + a1 / 180), yb = p1.sy + dy * (i + a1 / 180);
+          const top = bH * (1 - 200 / 440), bot = bH * (1 - 382 / 440);
+          ctx.beginPath();
+          ctx.moveTo(xa, ya - bot); ctx.lineTo(xb, yb - bot); ctx.lineTo(xb, yb - top); ctx.lineTo(xa, ya - top);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(w1x, w1y - winBot);
+      ctx.lineTo(w2x, w2y - winBot);
+      ctx.lineTo(w2x, w2y - winTop);
+      ctx.lineTo(w1x, w1y - winTop);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(253, 224, 71, 0.22)";
+      ctx.fill();
+      ctx.strokeStyle = "#f8fafc";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
 
     const stripes = 6;
     for (let i = 0; i < stripes; i++) {
@@ -341,27 +373,43 @@ function drawRightWallBuilding(ctx: Ctx, l: Layout, gxStart: number, gxEnd: numb
   const a = gridToScreen(gxStart, 0, l);
   const b = gridToScreen(gxEnd, 0, l);
   const h = 82 * l.scale;
-  const dx = b.sx - a.sx;
+  const n = Math.max(1, Math.round(gxEnd - gxStart));
+  const dx = (b.sx - a.sx) / n;
+  const dy = (b.sy - a.sy) / n;
+  // duvar üzerinde (tile t, yükseklik y) -> ekran noktası
+  const at = (t: number, y: number) => ({ x: a.sx + dx * t, y: a.sy + dy * t - y });
+  const quad = (t0: number, t1: number, y0: number, y1: number) => {
+    const p0 = at(t0, y0), p1 = at(t1, y0), p2 = at(t1, y1), p3 = at(t0, y1);
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.closePath();
+  };
   ctx.save();
-  // Ana cephe
-  ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.lineTo(b.sx, b.sy-h); ctx.lineTo(a.sx, a.sy-h); ctx.closePath();
-  ctx.fillStyle = palette.wall; ctx.fill(); ctx.strokeStyle = "rgba(15,23,42,.85)"; ctx.lineWidth = 2*l.scale; ctx.stroke();
-  // Çatı saçağı ve alt gölge
-  ctx.fillStyle = palette.roof; ctx.fillRect(a.sx-3*l.scale, a.sy-h-7*l.scale, dx+6*l.scale, 9*l.scale);
-  ctx.fillStyle = "rgba(15,23,42,.24)"; ctx.fillRect(a.sx, a.sy-h+12*l.scale, dx, 4*l.scale);
-  // Vitrin camları
-  const pad = dx*.12; const winY = a.sy-h+24*l.scale; const winH = 30*l.scale;
-  ctx.fillStyle = palette.glass; ctx.fillRect(a.sx+pad, winY, dx*.43, winH);
-  ctx.fillRect(a.sx+dx*.56, winY, dx*.30, winH);
-  ctx.strokeStyle = palette.trim; ctx.lineWidth = 2*l.scale;
-  ctx.strokeRect(a.sx+pad, winY, dx*.43, winH); ctx.strokeRect(a.sx+dx*.56, winY, dx*.30, winH);
-  // Cam bölmeleri ve kapı
-  ctx.beginPath(); ctx.moveTo(a.sx+pad+dx*.215,winY); ctx.lineTo(a.sx+pad+dx*.215,winY+winH); ctx.stroke();
-  ctx.fillStyle = palette.door; ctx.fillRect(a.sx+dx*.43, a.sy-39*l.scale, dx*.12, 39*l.scale);
-  ctx.strokeStyle = palette.trim; ctx.strokeRect(a.sx+dx*.43, a.sy-39*l.scale, dx*.12, 39*l.scale);
-  ctx.fillStyle = "#fef3c7"; ctx.beginPath(); ctx.arc(a.sx+dx*.525,a.sy-20*l.scale,1.5*l.scale,0,Math.PI*2); ctx.fill();
+  // Ana cephe: vitrin dokulu duvar (PNG), yoksa düz dolgu
+  quad(0, n, 0, h);
+  const tex = drawWallTex(ctx, "shop", palette.wall, a, b, h, n);
+  if (!tex) { ctx.fillStyle = palette.wall; ctx.fill(); }
+  quad(0, n, 0, h);
+  ctx.strokeStyle = "rgba(15,23,42,.85)"; ctx.lineWidth = 2 * l.scale; ctx.stroke();
+  // Çatı saçağı (duvara paralel)
+  quad(-0.04, n + 0.04, h - 1 * l.scale, h + 8 * l.scale);
+  ctx.fillStyle = palette.roof; ctx.fill();
+  quad(-0.04, n + 0.04, h - 1 * l.scale, h + 8 * l.scale);
+  ctx.strokeStyle = "rgba(15,23,42,.7)"; ctx.lineWidth = 1.2 * l.scale; ctx.stroke();
+  // Vitrin camlarına renkli yansıma (PNG'deki iki cam / karo)
+  if (tex) {
+    ctx.fillStyle = palette.glass;
+    for (let i = 0; i < n; i++) {
+      for (const [w0, w1] of [[12, 84], [96, 168]]) {
+        quad(i + w0 / 180, i + w1 / 180, h * (1 - 382 / 440), h * (1 - 200 / 440));
+        ctx.fill();
+      }
+    }
+  } else {
+    quad(0.12 * n, 0.55 * n, 24 * l.scale, 54 * l.scale);
+    ctx.fillStyle = palette.glass; ctx.fill();
+  }
   // Işık çizgisi
-  ctx.fillStyle = "rgba(255,237,160,.75)"; ctx.fillRect(a.sx+pad, a.sy-h+18*l.scale, dx*.74, 2*l.scale);
+  quad(0.1 * n, 0.9 * n, h - 20 * l.scale, h - 18 * l.scale);
+  ctx.fillStyle = "rgba(255,237,160,.65)"; ctx.fill();
   ctx.restore();
 }
 
@@ -861,7 +909,7 @@ function drawSahilKasabasiExtras(ctx: Ctx, l: Layout, time: number) {
 /* v7: Habbo tarzı sıcak zemin / duvar / zemin kalınlığı                */
 /* ------------------------------------------------------------------ */
 
-type TileKind = "plain" | "wood" | "sand" | "grass" | "asphalt" | "soil" | "stone" | "carpet" | "marble" | "brick";
+type TileKind = "plain" | "wood" | "sand" | "grass" | "asphalt" | "soil" | "stone" | "carpet" | "marble" | "brick" | "neon" | "metal" | "snow";
 type TileStyle = { a: string; b: string; kind: TileKind; edge: string };
 
 function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): TileStyle {
@@ -875,7 +923,7 @@ function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): Tile
     case "kis-koyu":
       if (gx >= 11 && gx <= 19 && gy >= 4 && gy <= 11) return { a: (gx + gy) % 2 ? "#cfe9f7" : "#c3e1f2", b: "#b4d6ec", kind: "marble", edge: "#6aa5c855" };
       if (gy === 8 && gx <= 10) return { a: "#d9cfc0", b: "#cdc2b0", kind: "brick", edge: "#7a6e5d55" };
-      return { a: (gx * 7 + gy * 3) % 5 < 2 ? "#f4f8fd" : "#eaf1f9", b: "#dde8f4", kind: "plain", edge: "#9fb6d333" };
+      return { a: (gx * 7 + gy * 3) % 5 < 2 ? "#f4f8fd" : "#eaf1f9", b: "#dde8f4", kind: "snow", edge: "#9fb6d333" };
     case "emlak-ofisi":
       if (gx >= 6 && gx <= 10 && gy >= 5 && gy <= 10) return { a: "#99f6e4", b: "#7fe7d8", kind: "carpet", edge: "#0f766e55" };
       return { a: "#efe6d6", b: "#e0d5bf", kind: "marble", edge: "#a8a29e44" };
@@ -906,9 +954,9 @@ function tileStyle(slug: string, gx: number, gy: number, theme: RoomTheme): Tile
     case "oyunika":
     case "parti-oyunu":
     case "tetris-arena":
-      return { a: "#5a47a8", b: "#4f3f98", kind: "plain", edge: "#c4b5fd44" };
+      return { a: "#9b86f0", b: "#8873e0", kind: "neon", edge: "#c4b5fd44" };
     case "hain-avi":
-      return { a: "#475569", b: "#3f4b5c", kind: "plain", edge: "#94a3b844" };
+      return { a: "#7d8ea6", b: "#71829a", kind: "metal", edge: "#94a3b844" };
     default:
       if (slug.startsWith("home-")) return { a: theme.floorA, b: theme.floorB, kind: (theme.floorKind as TileKind | undefined) ?? "wood", edge: "#6b431f55" };
       return base;
@@ -929,7 +977,7 @@ function drawStyledTile(
 ) {
   const st = tileStyle(slug, gx, gy, theme);
   const fillCol = (gx + gy) % 2 === 0 ? st.a : st.b;
-  const seamless = st.kind === "grass" || st.kind === "sand" || st.kind === "asphalt" || st.kind === "soil";
+  const seamless = st.kind === "snow" || st.kind === "grass" || st.kind === "sand" || st.kind === "asphalt" || st.kind === "soil";
   const variant = ((gx * 73 + gy * 137) >> 2) % 4;
   const useTex = isFloorKind(st.kind) && drawFloorTex(ctx, st.kind, fillCol, variant, sx, sy, l.tileW, l.tileH);
   if (!useTex) {
@@ -1335,6 +1383,12 @@ export function drawRoom(
         const swell = Math.cos(time / 680 - gx * 0.5 + gy * 1.1);
         const isShore = !isWaterTile(slug, gx - 1, gy);
 
+        // PNG su dokusu (4 kare animasyon); hover'da veya doku yoksa eski vektör dolgu
+        const wf = Math.floor(time / 300 + gx * 0.7 + gy * 1.3) & 3;
+        const texWater = !isHover && drawFloorTex(ctx, "water", isShore ? "#5fcdf5" : wave + swell < -0.45 ? "#1a86bf" : "#2aa0d8", wf, sx, sy, l.tileW, l.tileH);
+        if (texWater) {
+          ctx.fillStyle = "rgba(0,0,0,0)";
+        } else
         ctx.fillStyle = isHover
           ? "rgba(56, 189, 248, 0.85)"
           : isShore
@@ -1344,9 +1398,11 @@ export function drawRoom(
               : wave + swell < -0.45
                 ? "#0c4a6e"
                 : "#075985";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(125, 211, 252, 0.1)";
-        ctx.stroke();
+        if (!texWater) {
+          ctx.fill();
+          ctx.strokeStyle = "rgba(125, 211, 252, 0.1)";
+          ctx.stroke();
+        }
 
         // Kıyı köpüğü ve kıyıya vuran dalga şeritleri
         if (isShore) {
@@ -1563,6 +1619,18 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   const centerGx = item.gx + (wTiles - 1) / 2;
   const centerGy = item.gy + (hTiles - 1) / 2;
   const { sx, sy } = gridToScreen(centerGx, centerGy, l);
+
+  // 0a) Park halindeki arabalar: trafik araçlarının 4 yönlü sheet'i (rot 0 +x, 1 +y, 2 -x, 3 -y)
+  if ((item.type === "car_red" || item.type === "car_blue" || item.type === "car_yellow") && ((item.rot ?? 0) >= 2 || gfx.f3d)) {
+    const vs = vehicleSheet(item.type);
+    if (vs) {
+      const c = gridToScreen(item.gx + wTiles / 2, item.gy + hTiles / 2, l);
+      const w = (VEH_FW / 4) * l.scale;
+      const h = (VEH_FH / 4) * l.scale;
+      mipDraw(ctx, vs, (((item.rot ?? 0) % 4 + 4) % 4) * VEH_FW, 0, VEH_FW, VEH_FH, c.sx - w / 2, c.sy - (VEH_FEET / 4) * l.scale, w, h);
+      return;
+    }
+  }
 
   // 0) 4 yönlü 3D eşya sprite'ı (rot 0-3): zemin merkezi, kapladığı dikdörtgenin ortasına oturur
   const f3 = FURNI_BY_TYPE[item.type] ? f3Frame(item.type, item.rot ?? 0) : null;
@@ -2947,12 +3015,12 @@ function drawEmoteArm(ctx: Ctx, p: Player, ay: number, time: number) {
 let LAYER_DIR = 0;
 let LAYER_FLIP = 1;
 let LAYER_SEATED = false;
-function drawLayeredAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number): boolean {
+function drawLayeredAvatar(ctx: Ctx, p: Player, ay: number, isMoving: boolean, time: number, legTint?: string): boolean {
   const standing = !p.isSitting && !p.isRidingHorse;
   const seatedPose = p.isSitting && !p.isRidingHorse && !isMoving && p.seatType !== "lounger";
   const specs = bodyLayers({
     skin: p.skinColor, shirt: p.shirtColor, hair: p.hairColor, hairStyle: p.hairStyle, legs: standing || seatedPose,
-    faceFront: !FACE_BACK, top: p.top, hat: p.hat, glasses: p.glasses, back: p.back,
+    faceFront: !FACE_BACK, top: p.top, hat: p.hat, glasses: p.glasses, back: p.back, legTint,
   });
   if (!layersReady(specs)) return false;
   if (p.back && !hasLayeredBack(p.back)) drawBack(ctx, p.back, ay, time, isMoving && !p.isSitting);
@@ -3441,11 +3509,13 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
     nameColor = "#34d399";
   } else if (special === "vistekiis") {
     legColor = "#18181b";
-    drawVistekiis(ctx, body, ay, walking, time);
+    // Kurucu görünümü artık 3D katmanlı karakterle: siyah kıyafet + uzun siyah saç (kozmetikler korunur)
+    if (!(body.layered && drawLayeredAvatar(ctx, { ...body, shirtColor: "#09090b", hairColor: "#09090b", hairStyle: "hs_long" }, ay, walking, time, "#222228"))) drawVistekiis(ctx, body, ay, walking, time);
     nameColor = "#f472b6";
   } else if (special === "sevaastian") {
     legColor = "#1e1b4b";
-    drawSevaastian(ctx, body, ay, walking, time);
+    // Siyah takım elbise + koyu gözlük varsayılan; kıyafet/gözlük seçtiyse onlar geçerli
+    if (!(body.layered && drawLayeredAvatar(ctx, { ...body, shirtColor: "#09090b", hairColor: "#09090b", hairStyle: "hs_short", top: body.top || "tp_suit", glasses: body.glasses || "gl_shades" }, ay, walking, time, "#222228"))) drawSevaastian(ctx, body, ay, walking, time);
     nameColor = "#38bdf8";
   } else {
     drawStandardAvatar(ctx, body, ay, walking, time);

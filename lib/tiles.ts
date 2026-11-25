@@ -11,10 +11,10 @@ export const TILE_VARIANTS = 4;
 export const WALL_W = 180;
 export const WALL_H = 440;
 
-export type FloorKind = "wood" | "sand" | "grass" | "brick" | "asphalt" | "soil" | "stone" | "marble" | "carpet" | "plain";
-export type WallKind = "plaster" | "brick" | "wood" | "tile" | "metal" | "stone";
-const FLOORS: FloorKind[] = ["wood", "sand", "grass", "brick", "asphalt", "soil", "stone", "marble", "carpet", "plain"];
-const WALLS: WallKind[] = ["plaster", "brick", "wood", "tile", "metal", "stone"];
+export type FloorKind = "wood" | "sand" | "grass" | "brick" | "asphalt" | "soil" | "stone" | "marble" | "carpet" | "plain" | "neon" | "metal" | "snow" | "water";
+export type WallKind = "plaster" | "brick" | "wood" | "tile" | "metal" | "stone" | "shop";
+const FLOORS: FloorKind[] = ["wood", "sand", "grass", "brick", "asphalt", "soil", "stone", "marble", "carpet", "plain", "neon", "metal", "snow", "water"];
+const WALLS: WallKind[] = ["plaster", "brick", "wood", "tile", "metal", "stone", "shop"];
 
 const imgs = new Map<string, HTMLImageElement>();
 function img(name: string): HTMLImageElement | null {
@@ -99,4 +99,26 @@ export function wallKindFor(slug: string): WallKind {
   if (slug === "avm" || slug === "avm-kat2" || slug === "emlak-ofisi") return "tile";
   if (slug === "hain-avi" || slug === "oyunika" || slug === "parti-oyunu" || slug === "tetris-arena") return "metal";
   return "plaster";
+}
+
+const SIGN_W = 384;
+const SIGN_H = 96;
+const SIGN_CAP = 28;
+/** PNG tabela levhası (3 dilimli): bg rengiyle boyanan panel + border rengiyle boyanan çerçeve/ampuller. (0,0) merkez, tw×th boyut. */
+export function drawSignPlate(ctx: CanvasRenderingContext2D, bg: string, border: string, tw: number, th: number): boolean {
+  const ip = img("sign_panel");
+  const iff = img("sign_frame");
+  if (!ip || !iff) return false;
+  const pc = tint(`sp|${bg}`, ip, 0, 0, SIGN_W, SIGN_H, bg);
+  const fc = tint(`sf|${border}`, iff, 0, 0, SIGN_W, SIGN_H, border);
+  const k = th / SIGN_H;
+  const cap = SIGN_CAP * k;
+  const x0 = -tw / 2;
+  const y0 = -th / 2;
+  for (const c of [pc, fc]) {
+    mipDraw(ctx, c, 0, 0, SIGN_CAP, SIGN_H, x0, y0, cap + 0.4, th);
+    mipDraw(ctx, c, SIGN_CAP, 0, SIGN_W - 2 * SIGN_CAP, SIGN_H, x0 + cap, y0, tw - 2 * cap + 0.4, th);
+    mipDraw(ctx, c, SIGN_W - SIGN_CAP, 0, SIGN_CAP, SIGN_H, x0 + tw - cap, y0, cap, th);
+  }
+  return true;
 }

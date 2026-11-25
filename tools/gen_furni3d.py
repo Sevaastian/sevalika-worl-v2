@@ -353,6 +353,217 @@ def food_truck():
           P("box", (21.2, 30, -45), (.5, 8, 8), hexc("#fde047"), emissive=True), P("ell", (-8, 44.5, -30), (5, 2.0, 5), G(.7))]
     return o
 
+
+# --- v38: ağaç, palmiye ve büyük yapılar. Ön yüz -x (rot 0'da kameraya bakar), uzun eksen z. ---
+def tree():
+    br = hexc("#6b4423"); g = [hexc("#2f8f46"), hexc("#3da35a"), hexc("#25793a"), hexc("#4bb768")]
+    o = [P("cone", (0, 0, 0), (9.5, 6.0, 40), br, spec=.05),
+         P("cap", (0, 0, 0), ((0, 30, 0), (-9, 50, 4), 3.2), br), P("cap", (0, 0, 0), ((0, 32, 0), (8, 52, -3), 3.0), br)]
+    rng = np.random.RandomState(21)
+    blobs = [(0, 66, 0, 24), (-14, 56, 9, 17), (15, 57, -8, 17), (6, 52, 15, 15), (-10, 58, -14, 16), (0, 80, 2, 17), (-12, 72, 6, 13), (13, 72, -4, 13)]
+    for i, (x, y, z, r) in enumerate(blobs):
+        o.append(P("ell", (x, y, z), (r, r * .85, r), g[i % 4], spec=.05))
+    for i in range(14):
+        a = rng.uniform(0, 6.28); rr = rng.uniform(14, 26); y = rng.uniform(52, 80)
+        o.append(P("ell", (math.cos(a) * rr, y, math.sin(a) * rr), (6.5, 5.5, 6.5), g[rng.randint(4)], spec=.05))
+    return o
+
+def palm():
+    br = hexc("#8a6a3d"); br2 = hexc("#6d5230"); lf = [hexc("#2f9e4a"), hexc("#3fb55c"), hexc("#278a3f")]
+    pts = [(0, 0, 0), (2, 22, 1), (6, 46, 3), (10, 70, 3), (12, 86, 2)]
+    o = []
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        o.append(P("cap", (0, 0, 0), (a, b, 4.8 - i * .7), br if i % 2 == 0 else br2, spec=.03))
+    for k in range(1, 9):
+        y = k * 9.5
+        xo = 2 + (y / 86) * 10
+        o.append(P("torus", (xo * 0.9, y, 1.5 * (y / 40)), (4.3 - (y / 86) * 1.0, .6), br2))
+    crown = np.array([12.0, 88.0, 2.0])
+    for i in range(10):
+        a = math.radians(i * 36 + 8); L = 40 + (i % 3) * 3; D = 20 + (i % 2) * 6
+        dx, dz = math.cos(a), -math.sin(a)
+        for t in (.18, .35, .52, .7, .86):
+            pos = crown + np.array([dx * L * t, -(t ** 2) * D + 4 * (1 - t), dz * L * t])
+            o.append(P("ell", tuple(pos), (6.2 - t * 2.4, 1.1, 4.0 - t * 1.6), lf[i % 3], R=rot(0, math.degrees(a), 0), spec=.15))
+    for c in ((14.5, 82, 5), (9.5, 82, -1), (13, 80, -4)):
+        o.append(P("ell", c, (3.2, 3.4, 3.2), hexc("#5b3a1c")))
+    return o
+
+def _thatch(zl, xl, y0, rise, col):
+    """Beşik çatı: sırt z ekseni boyunca"""
+    ang = math.degrees(math.atan2(rise, xl))
+    L = math.hypot(xl, rise)
+    return [P("box", (-xl / 2, y0 + rise / 2, 0), (L / 2, 1.6, zl), col, R=rot(0, 0, ang), rad=.8),
+            P("box", (xl / 2, y0 + rise / 2, 0), (L / 2, 1.6, zl), col * .9, R=rot(0, 0, -ang), rad=.8),
+            P("box", (0, y0 + rise + .6, 0), (2.4, 1.6, zl + .5), col * .75, rad=.8)]
+
+def beach_cafe():
+    wd = hexc("#b9772c"); wd2 = hexc("#8a5a2b"); th = hexc("#d9b36a")
+    o = [P("box", (0, 2.5, 0), (66, 2.5, 88), wd, rad=.8)]
+    for i in range(10):
+        o.append(P("box", (-66 + i * 14.6, 5.1, 0), (.3, .3, 87), wd2))
+    for x in (-60, 60):
+        for z in (-82, 82, 0):
+            o.append(P("box", (x, 32, z), (2.0, 27, 2.0), wd2, rad=.5))
+    o += _thatch(88, 66, 58, 28, th)
+    o.append(P("box", (52, 17, 0), (4.5, 12, 78), wd2, rad=.6))  # arka duvar/bar
+    o.append(P("box", (36, 12, 0), (7.5, 8, 70), wd, rad=.6)); o.append(P("box", (36, 20.4, 0), (8.5, .9, 71), hexc("#f3e5c0"), rad=.4))
+    cols = ["#22c55e", "#f59e0b", "#38bdf8", "#ef4444", "#a855f7"]
+    for i in range(12):
+        o.append(P("cap", (0, 0, 0), ((52, 28, -66 + i * 12), (52, 36, -66 + i * 12), 1.6), hexc(cols[i % 5]), spec=.4))
+    o.append(P("box", (50, 27, 0), (1.0, .8, 74), wd2))
+    for z in (-50, -20, 20, 50):
+        o += [P("cyl", (14, 11, z), (5.5, 1.0), hexc("#2f6fd0"), rad=.5), P("cap", (0, 0, 0), ((14, 2, z), (14, 10, z), .9), G(.6))]
+    for z in (-60, 60):
+        o += [P("cyl", (-34, 9, z), (10, 1.2), hexc("#f1e0b8"), rad=.6), P("cyl", (-34, 4.5, z), (1.2, 4.5), G(.6))]
+    for z in (-70, -35, 0, 35, 70):
+        o.append(P("ell", (-64, 52, z), (2.6, 3.2, 2.6), hexc("#fde68a"), emissive=True))
+    o.append(P("box", (-64.5, 44, 0), (.8, 4, 20), hexc("#0ea5e9"), emissive=True))
+    return o
+
+def dj_booth():
+    d = G(.13); pk = hexc("#d946ef"); cy = hexc("#22d3ee")
+    o = [P("box", (0, 4, 0), (40, 4, 66), G(.2), rad=1.0), P("box", (-44, 2, 0), (4, 2, 40), G(.25), rad=.6)]
+    for z in (-62, 62):
+        o += [P("box", (30, 36, z), (2.0, 32, 2.0), d, rad=.5), P("box", (-30, 36, z), (2.0, 32, 2.0), d, rad=.5)]
+    o.append(P("box", (0, 68, 0), (32, 2.2, 66), d, rad=.8))
+    o.append(P("box", (-31, 66, 0), (.6, .8, 64), pk, emissive=True)); o.append(P("box", (31, 66, 0), (.6, .8, 64), cy, emissive=True))
+    rb = ["#ef4444", "#f97316", "#facc15", "#22c55e", "#06b6d4", "#6366f1", "#a855f7"]
+    for i, c in enumerate(rb):
+        o.append(P("box", (36, 40, -54 + i * 18), (.8, 22, 7.6), hexc(c), emissive=True))
+    o.append(P("box", (-6, 14, 0), (7, 5, 26), G(.12), rad=.8)); o.append(P("box", (-6, 19.2, 0), (7.4, .6, 26.4), G(.3), rad=.4))
+    for z in (-14, 14):
+        o += [P("cyl", (-6, 19.9, z), (6.0, .35), G(.05), rad=.3), P("cyl", (-6, 20.3, z), (1.0, .3), hexc("#ef4444"))]
+    for z in (-50, 50):
+        o.append(P("box", (-12, 16, z), (7, 12, 7), d, rad=1.0))
+        o.append(P("cyl", (-19.4, 18, z), (4.6, .5), G(.3), R=rot(0, 0, 90), rad=.3)); o.append(P("cyl", (-19.8, 18, z), (1.8, .5), G(.5), R=rot(0, 0, 90)))
+        o.append(P("cyl", (-19.4, 10, z), (2.4, .5), G(.3), R=rot(0, 0, 90)))
+    o.append(P("box", (-16, 23, 0), (2, 3, 12), pk, emissive=True))
+    return o
+
+def tiki_bar():
+    wd = hexc("#9a6330"); wd2 = hexc("#6e4420"); th = hexc("#d4a85a")
+    o = [P("box", (0, 2, 0), (40, 2, 40), wd2, rad=.7)]
+    o.append(P("box", (14, 12, 0), (6, 10, 34), wd, rad=.6)); o.append(P("box", (-8, 12, 28), (24, 10, 6), wd, rad=.6))
+    o.append(P("box", (14, 22.4, 0), (7, .9, 35), hexc("#f3e5c0"), rad=.4)); o.append(P("box", (-8, 22.4, 28), (25, .9, 7), hexc("#f3e5c0"), rad=.4))
+    for x, z in ((-34, -34), (34, -34), (-34, 34), (34, 34)):
+        o.append(P("box", (x, 28, z), (1.8, 26, 1.8), wd2, rad=.5))
+    o.append(P("ell", (0, 50, 0), (56, 28, 56), th, cut=((0, 1, 0), 0), stripe=(1, 6, hexc("#b88a42")), spec=.0))
+    o.append(P("ell", (0, 90, 0), (2.4, 3, 2.4), wd2))
+    cols = ["#22c55e", "#f59e0b", "#38bdf8", "#ef4444", "#a855f7"]
+    for i in range(6):
+        o.append(P("cap", (0, 0, 0), ((26, 34, -26 + i * 10), (26, 44, -26 + i * 10), 1.5), hexc(cols[i % 5]), spec=.4))
+    o.append(P("box", (24, 33, 0), (.8, .8, 33), wd2))
+    for z in (-18, 0, 18):
+        o += [P("cyl", (-10, 11, z), (5, 1.0), hexc("#ef4444"), rad=.5), P("cap", (0, 0, 0), ((-10, 2, z), (-10, 10, z), .9), G(.6))]
+    o.append(P("box", (-34, 40, 0), (.8, 4, 16), hexc("#f43f5e"), emissive=True))
+    for z in (-34, 34): o.append(P("ell", (-34.8, 36, z), (2.0, 2.8, 2.0), hexc("#fde68a"), emissive=True))
+    return o
+
+def casino_bar():
+    wd = hexc("#4a2a15"); gd = hexc("#d4a017"); rd = hexc("#7f1d1d")
+    o = [P("box", (-16, 14, 0), (7, 14, 84), wd, rad=.9), P("box", (-16, 28.6, 0), (8.2, 1.4, 85), hexc("#1f1b24"), rad=.7, spec=.4),
+         P("box", (-23.2, 14, 0), (.5, 11, 80), rd, rad=.3), P("box", (-23.4, 27, 0), (.5, .8, 82), gd, spec=.7), P("box", (-23.4, 3, 0), (.5, .8, 82), gd, spec=.7),
+         P("box", (24, 28, 0), (5, 28, 84), hexc("#23160d"), rad=.8)]
+    for lv in (24, 38):
+        o.append(P("box", (19, lv, 0), (3.2, .8, 80), wd))
+        for i in range(16):
+            o.append(P("cap", (0, 0, 0), ((19, lv + 1, -74 + i * 9.8), (19, lv + 10, -74 + i * 9.8), 1.6), hexc(["#22c55e", "#f59e0b", "#38bdf8", "#ef4444", "#a855f7"][i % 5]), spec=.5))
+    o.append(P("box", (28.8, 36, 0), (.4, 20, 78), hexc("#7dd3fc"), spec=.7))
+    for z in (-60, -30, 0, 30, 60):
+        o += [P("cyl", (-34, 11, z), (6, 1.0), rd, rad=.5), P("cap", (0, 0, 0), ((-34, 2, z), (-34, 10, z), 1.0), gd, spec=.6), P("cyl", (-34, .8, z), (5, .8), G(.3))]
+    o.append(P("box", (-12, 62, 0), (2, 6, 40), hexc("#fb7185"), emissive=True)); o.append(P("box", (-12.6, 62, 0), (1.0, 4, 36), hexc("#fef08a"), emissive=True))
+    for z in (-38, 38): o.append(P("box", (-12, 54, z), (1.0, 14, 1.0), G(.2)))
+    return o
+
+def fish_hut():
+    wd = hexc("#9a6a3a"); wd2 = hexc("#6e4a28"); rf = hexc("#3e4d5c")
+    o = [P("box", (0, 3, 0), (40, 3, 62), wd2, rad=.8), P("box", (14, 24, 0), (22, 21, 56), wd, rad=.8, stripe=(1, 5.0, hexc("#8a5a2f")))]
+    o += _thatch(60, 38, 45, 22, rf)
+    o.append(P("box", (-8.3, 18, 8), (.8, 14, 10), wd2, rad=.4)); o.append(P("box", (-8.5, 25, -26), (.6, 7, 9), hexc("#9fd3ef"), spec=.5)); o.append(P("box", (-8.8, 25, -26), (.5, 8, 10), wd2, rad=.3))
+    for z in (-44, 40): o.append(P("box", (-30, 20, z), (1.2, 20, 1.2), wd2))
+    o.append(P("box", (-30, 38, 0), (1.2, 1.0, 44), wd2))
+    for i in range(6):
+        o.append(P("ell", (-30, 28 - (i % 2) * 3, -32 + i * 12), (1.8, 6.2, 2.4), hexc("#cbd5e1"), spec=.6))
+    for z in (24, 34):
+        o += [P("cyl", (-24, 9, z), (6.2, 8), hexc("#7c4a1c"), rad=1.0), P("torus", (-24, 12, z), (6.3, .5), G(.25)), P("torus", (-24, 6, z), (6.3, .5), G(.25))]
+    o.append(P("box", (-22, 6, -52), (7, 4, 6), hexc("#b0793a"), rad=.5)); o.append(P("ell", (-22, 11, -52), (4.5, 2.5, 4.5), hexc("#94a3b8")))
+    return o
+
+def mine_entrance():
+    rk = [hexc("#6b7280"), hexc("#7b828d"), hexc("#585f6b"), hexc("#8b929c")]; wd = hexc("#7a4f2a")
+    o = []
+    rng = np.random.RandomState(6)
+    for i in range(34):
+        z = rng.uniform(-78, 78); x = rng.uniform(-6, 38); y = rng.uniform(10, 44)
+        if abs(z) < 26 and x < 14: continue
+        r = rng.uniform(10, 17)
+        o.append(P("ell", (x, y, z), (r, r * .9, r), rk[rng.randint(4)], spec=.05))
+    o.append(P("box", (30, 30, 0), (14, 30, 86), rk[2], rad=3))
+    o.append(P("box", (-6, 24, 0), (16, 24, 24), G(.04), rad=1.0))
+    for z in (-26, 26): o.append(P("box", (-20.5, 20, z), (2.6, 20, 2.6), wd, rad=.6))
+    o.append(P("box", (-20.5, 41, 0), (3.0, 2.6, 30), wd, rad=.6))
+    o.append(P("box", (-23.5, 46, 0), (.8, 3, 12), hexc("#3f2a14"))); o.append(P("box", (-24.0, 46, 0), (.4, 1.4, 9), hexc("#fbbf24"), emissive=True))
+    for z in (-12, 12): o.append(P("box", (-30, .7, z), (28, .5, .8), G(.3)))
+    for x in range(-58, -16, 8): o.append(P("box", (x, .4, 0), (.8, .5, 14), wd))
+    o.append(P("box", (-20.4, 36, 0), (.6, 3.4, 3.2), hexc("#ef4444"))); o.append(P("ell", (-21.3, 30, -26), (1.8, 2.4, 1.8), hexc("#fde68a"), emissive=True))
+    return o
+
+def _store(body, trim, awn, sign, glow):
+    o = [P("box", (6, 36, 0), (30, 36, 84), body, rad=1.2), P("box", (-25, 72.5, 0), (7, 2.4, 86), trim, rad=.8),
+         P("box", (-24.5, 5.0, 0), (1.4, 3.0, 82), trim)]
+    o.append(P("box", (-24.4, 22, 0), (.7, 17, 74), hexc("#1b2638"), spec=.6))
+    for i in range(6):
+        o.append(P("box", (-25.2, 22, -64 + i * 25.6), (.5, 16.2, 11.5), glow, emissive=True))
+    o.append(P("box", (-24.2, 22, 0), (1.0, 17.6, 1.4), trim))
+    o.append(P("box", (-27, 44.6, 0), (3.8, 1.0, 80), awn, stripe=(2, 9.0, G(.96)), R=rot(0, 0, 14), rad=.4))
+    o.append(P("box", (-26.5, 62, 0), (1.6, 7.0, 40), sign, rad=.8, emissive=True))
+    o.append(P("box", (-28.2, 62, 0), (.6, 4.8, 36), G(.96), emissive=True))
+    o.append(P("box", (-24.8, 15, 62), (1.2, 15, 10), trim, rad=.4)); o.append(P("box", (-25.6, 15, 62), (.5, 14, 8), hexc("#9fd3ef"), spec=.6))
+    return o
+
+def store_fashion(): return _store(hexc("#8b5cf6"), hexc("#f1ecff"), hexc("#ec4899"), hexc("#c026d3"), hexc("#fde1f0"))
+def store_tech(): return _store(hexc("#2563eb"), hexc("#e0ecff"), hexc("#22d3ee"), hexc("#0ea5e9"), hexc("#a5f3fc"))
+def store_food(): return _store(hexc("#f59e0b"), hexc("#fff3d6"), hexc("#ef4444"), hexc("#dc2626"), hexc("#fff0b8"))
+
+def kitchen_block():
+    st = G(.78); d = G(.18)
+    o = [P("box", (-8, 15, 0), (16, 15, 80), st, rad=.9, spec=.55), P("box", (-8, 30.5, 0), (17, 1.0, 81), G(.88), rad=.5, spec=.7),
+         P("box", (-24.2, 15, 0), (.5, 12, 76), G(.6), spec=.6)]
+    for i in range(7):
+        o.append(P("box", (-24.5, 15, -66 + i * 22), (.4, 9, 9.5), G(.7), spec=.5)); o.append(P("box", (-25.0, 19, -66 + i * 22), (.4, 1.0, 5), G(.2)))
+    for z in (-48, -16): 
+        for dz in (-8, 8):
+            o += [P("cyl", (-6, 31.8, z + dz), (5.0, .5), d, rad=.3), P("torus", (-6, 32.4, z + dz), (3.6, .45), hexc("#fb923c"), emissive=True)]
+    o.append(P("box", (14, 56, -32), (17, 5, 52), G(.74), rad=1.0, spec=.55))
+    o.append(P("box", (14, 70, -32), (6, 10, 8), G(.66), spec=.5))
+    o.append(P("box", (-8, 33, 40), (9, 1.4, 22), hexc("#b9772c"), rad=.6))
+    for z in (-60, -30, 0, 30, 60):
+        o.append(P("cyl", (22, 40, z), (5.0, 3.0), hexc(["#ef4444", "#94a3b8", "#f59e0b", "#94a3b8", "#22c55e"][int((z + 60) // 30)]), rad=.8, spec=.4))
+    o.append(P("box", (20, 33, 0), (1.2, .8, 76), G(.5), spec=.6))
+    for z in (-70, -30): o.append(P("cap", (0, 0, 0), ((8, 56, z), (8, 63, z + 4), .8), G(.6)))
+    return o
+
+def barn():
+    rd = hexc("#b83227"); rd2 = hexc("#8e231c"); wh = hexc("#f4efe6"); rf = hexc("#5c6470")
+    o = [P("box", (0, 26, 0), (46, 26, 82), rd, rad=1.0, stripe=(2, 6.0, rd2))]
+    ang = math.degrees(math.atan2(28, 46)); L = math.hypot(46, 28)
+    o += [P("box", (-23, 59, 0), (L / 2 + 2, 1.8, 86), rf, R=rot(0, 0, ang), rad=.8), P("box", (23, 59, 0), (L / 2 + 2, 1.8, 86), rf * .9, R=rot(0, 0, -ang), rad=.8),
+          P("box", (0, 73.6, 0), (3.0, 1.8, 86), rf * .7, rad=.8)]
+    o.append(P("box", (0, 61, 82.4), (46, 24, .7), rd, rad=.4))
+    for i, zz in enumerate((83.2,)):
+        o.append(P("box", (0, 22, zz), (19, 20, .6), rd2, rad=.3))
+        o.append(P("box", (-0.3, 22, zz + .4), (19.8, .9, .5), wh)); o.append(P("box", (0, 22, zz + .4), (.9, 20.8, .5), wh))
+        o.append(P("box", (0, 22, zz + .5), (17.6, 17.6, .3), wh, R=rot(0, 0, 45)) if False else P("box", (0, 52, zz), (7, 4, .5), G(.1)))
+    for z in (-50, -10, 30):
+        o.append(P("box", (-46.5, 30, z), (.6, 7, 7), G(.12))); o.append(P("box", (-47.0, 30, z), (.5, .8, 8), wh)); o.append(P("box", (-47.0, 30, z), (.8, 8, .5), wh))
+    o += [P("cyl", (-24, 40, -108), (16, 40), hexc("#c9ced6"), rad=1.0, spec=.2, stripe=(1, 8.0, hexc("#b4bac4"))),
+          P("ell", (-24, 82, -108), (16.5, 12, 16.5), hexc("#a0a7b3"), cut=((0, 1, 0), 0))]
+    for k, (x, z) in enumerate(((-60, 40), (-60, 62), (-66, 52), (-60, 14))):
+        o.append(P("cyl", (x, 6.2, z), (6.5, 7.5), hexc("#d9b94a"), R=rot(90, 0, 0), rad=2.0, stripe=(2, 3.0, hexc("#c4a43c"))))
+    return o
+
 # tür -> (model, fw, fh, feet_y, wTiles, hTiles)
 ITEMS = {
     "bench": (bench, 260, 280, 190, 1, 1),
@@ -386,6 +597,19 @@ ITEMS = {
     "clock_tower": (clock_tower, 540, 940, 770, 2, 2),
     "fountain_big": (fountain_big, 820, 480, 300, 3, 3),
     "food_truck": (food_truck, 700, 480, 350, 3, 2),
+    "tree": (tree, 300, 440, 395, 1, 1),
+    "palm": (palm, 360, 470, 400, 1, 1),
+    "beach_cafe": (beach_cafe, 930, 620, 377, 4, 3),
+    "dj_booth": (dj_booth, 680, 540, 361, 3, 2),
+    "tiki_bar": (tiki_bar, 560, 420, 273, 2, 2),
+    "casino_bar": (casino_bar, 810, 510, 299, 4, 2),
+    "fish_hut": (fish_hut, 680, 440, 261, 3, 2),
+    "mine_entrance": (mine_entrance, 810, 590, 379, 4, 2),
+    "store_fashion": (store_fashion, 810, 610, 399, 4, 2),
+    "store_tech": (store_tech, 810, 610, 399, 4, 2),
+    "store_food": (store_food, 810, 610, 399, 4, 2),
+    "kitchen_block": (kitchen_block, 810, 540, 329, 4, 2),
+    "barn": (barn, 1000, 700, 447, 4, 3),
 }
 
 SCALE = {"bench": 1.3}
@@ -404,13 +628,25 @@ def scaled(prims, k):
         out.append(q)
     return out
 
+MIRROR = {"billboard", "bus_stop"}
+
+def mirrored(prims):
+    M = np.diag([-1.0, 1.0, 1.0]); out = []
+    for p in prims:
+        q = P.__new__(P); q.__dict__ = dict(p.__dict__)
+        q.c = M @ p.c; q.R = M @ p.R @ M
+        out.append(q)
+    return out
+
 def gen(name):
     fn, fw, fh, feet, wt, ht = ITEMS[name]
     r3d.FW, r3d.FH, r3d.FEET_PX, r3d.ELEV = fw, fh, feet, math.radians(30)
     sheet = Image.new("RGBA", (fw * 4, fh))
     for d, yaw in enumerate(DIRS_YAW):
         cam = r3d.Cam(yaw)
-        rgb, al, dp = render(scaled(fn(), SCALE[name]) if name in SCALE else fn(), cam)
+        pr = scaled(fn(), SCALE[name]) if name in SCALE else fn()
+        if name in MIRROR: pr = mirrored(pr)
+        rgb, al, dp = render(pr, cam)
         sheet.paste(to_image(downsample(outline(rgb, al, dp), al)), (d * fw, 0))
     sheet.save(os.path.join(OUT, name + ".png"), optimize=True)
     print("ok", name, flush=True)

@@ -103,8 +103,11 @@ export class GameEngine {
       const dt = this.lastTs ? Math.min(0.1, (ts - this.lastTs) / 1000) : 0;
       this.lastTs = ts;
       this.watchPerf(ts);
+      const t0 = performance.now();
       this.update(dt);
+      const t1 = performance.now();
       this.render(ts);
+      this.fpsOverlay(ts, t1 - t0, performance.now() - t1);
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -126,6 +129,40 @@ export class GameEngine {
       this.perfN = 0;
       this.perfSum = 0;
     }
+  }
+
+  /** ?fps ile açılan teşhis göstergesi: fps, güncelleme/çizim ms, nesne sayıları */
+  private fpsOn: boolean | null = null;
+  private fpsFrames = 0;
+  private fpsT = 0;
+  private fpsShow = "";
+  private fpsU = 0;
+  private fpsR = 0;
+  private fpsWorst = 0;
+  private fpsOverlay(ts: number, upd: number, rnd: number) {
+    if (this.fpsOn === null) this.fpsOn = typeof window !== "undefined" && /[?&]fps\b/.test(window.location.search);
+    if (!this.fpsOn) return;
+    this.fpsFrames++;
+    this.fpsU += upd;
+    this.fpsR += rnd;
+    this.fpsWorst = Math.max(this.fpsWorst, upd + rnd);
+    if (!this.fpsT) this.fpsT = ts;
+    if (ts - this.fpsT >= 1000) {
+      const n = this.fpsFrames;
+      this.fpsShow = `${Math.round((n * 1000) / (ts - this.fpsT))} fps | güncelle ${(this.fpsU / n).toFixed(1)} ms | çiz ${(this.fpsR / n).toFixed(1)} ms | en kötü ${this.fpsWorst.toFixed(0)} ms | oyuncu ${this.players.length} eşya ${this.furni.length} | ${gfx.low ? "düşük" : "normal"} | ${Math.round(window.devicePixelRatio * 100) / 100}x`;
+      this.fpsFrames = 0; this.fpsU = 0; this.fpsR = 0; this.fpsWorst = 0; this.fpsT = ts;
+    }
+    const c = this.ctx;
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.font = "bold 13px monospace";
+    const w = c.measureText(this.fpsShow).width + 12;
+    c.fillStyle = "rgba(0,0,0,0.75)";
+    const ox = Math.max(4, (this.canvas.width - w) / 2);
+    c.fillRect(ox, 6, w, 22);
+    c.fillStyle = "#4ade80";
+    c.fillText(this.fpsShow, ox + 6, 22);
+    c.restore();
   }
 
   stop() {

@@ -201,10 +201,49 @@ def t_plain(seed):
     return T
 
 
+def t_neon(seed):
+    u, v = grid()
+    pu = (u * 8) % 1; pv = (v * 8) % 1
+    line = np.minimum(np.minimum(pu, 1 - pu), np.minimum(pv, 1 - pv))
+    T = 0.74 + 0.10 * (pnoise(N, 1.6, seed) - .5) + 0.06 * ((np.floor(u * 8) + np.floor(v * 8)) % 2 == 0)
+    T = T + 0.55 * np.clip(1 - line / 0.012, 0, 1) + 0.12 * np.clip(1 - line / 0.05, 0, 1)
+    dots = (np.sin(2 * np.pi * u * 16) * np.sin(2 * np.pi * v * 16)) > 0.985
+    return np.clip(T + 0.35 * dots, 0, 1)
+
+
+def t_metal(seed):
+    u, v = grid()
+    # çapraz tırtıklı çelik levha (diamond plate)
+    a = (u * 16 + v * 16) % 1; b = (u * 16 - v * 16) % 1
+    bump = np.clip(1 - np.abs(a - .5) * 3.2, 0, 1) * np.clip(1 - np.abs(b - .5) * 3.2, 0, 1)
+    T = 0.62 + 0.10 * (pnoise(N, 1.3, seed) - .5) + 0.22 * bump
+    seam = np.minimum(np.minimum(u * 2 % 1, 1 - u * 2 % 1), np.minimum(v * 2 % 1, 1 - v * 2 % 1))
+    return np.clip(T - 0.25 * np.clip(1 - seam / 0.012, 0, 1), 0, 1)
+
+
+def t_snow(seed):
+    T = 0.965 + 0.03 * (pnoise(N, 2.2, seed) - .5) + 0.012 * (pnoise(N, .5, seed + 3) - .5)
+    u, v = grid()
+    sp = (pnoise(N, .2, seed + 9) > 0.985)
+    return np.clip(T - 0.035 * (pnoise(N, 2.8, seed + 5) > .62) + 0.03 * sp, 0, 1)
+
+
+_WPH = {}
+def t_water(seed):
+    u, v = grid()
+    ph = (seed % 4) * (2 * np.pi / 4)  # 4 kare = tam döngü
+    w1 = np.sin(2 * np.pi * (3 * u + 2 * v) + ph + 0.8 * np.sin(2 * np.pi * (2 * u - v) - ph))
+    w2 = np.sin(2 * np.pi * (-2 * u + 4 * v) - ph + 0.6 * np.sin(2 * np.pi * (3 * v + u) + ph))
+    crest = np.clip(1 - np.abs(w1) * 5.0, 0, 1) * 0.45 + np.clip(1 - np.abs(w2) * 6.0, 0, 1) * 0.30
+    T = 0.74 + 0.07 * w1 + 0.05 * w2 + crest
+    return np.clip(T, 0, 1)
+
+
 KINDS = {"wood": t_wood, "sand": t_sand, "grass": t_grass, "brick": t_brick, "asphalt": t_asphalt, "soil": t_soil,
-         "stone": t_stone, "marble": t_marble, "carpet": t_carpet, "plain": t_plain}
+         "stone": t_stone, "marble": t_marble, "carpet": t_carpet, "plain": t_plain,
+         "neon": t_neon, "metal": t_metal, "snow": t_snow, "water": t_water}
 # yalnızca kenarında bevel/koyu çizgi olan (karo olarak okunan) türler
-EDGED = {"marble": .10, "plain": .08, "carpet": .06, "stone": .0, "brick": .0, "wood": .0}
+EDGED = {"marble": .10, "plain": .08, "carpet": .06, "stone": .0, "brick": .0, "wood": .0, "neon": .06, "metal": .08}
 
 
 def sample_diamond(T, ss=2):
@@ -229,7 +268,7 @@ def sample_diamond(T, ss=2):
 def make_floor(kind):
     out = Image.new("LA", (TW * VAR, TH), (0, 0))
     for var in range(VAR):
-        T = KINDS[kind](100 + var * 17 + hash(kind) % 50)
+        T = KINDS[kind](var if kind == "water" else 100 + var * 17 + hash(kind) % 50)
         val, inside, edge, u, v = sample_diamond(T)
         bw = EDGED.get(kind, None)
         if bw:
@@ -388,6 +427,31 @@ def w_stone(seed):
 WALLS = {"plaster": w_plaster, "brick": w_brick, "wood": w_wood, "tile": w_tile, "metal": w_metal, "stone": w_stone}
 
 
+def w_shop(seed):
+    """Mağaza cephesi: taç silme + iki camlı vitrin modülü (cam koyu, çerçeve açık); duvar rengiyle çarpılır"""
+    T = 0.94 + 0.04 * (wnoise(1.6, seed) - .5)
+    crown_base(T, wainscot=False, base=0.70)
+    band(T, 60, 64, 0.95)  # lento
+    for x0 in (12, 96):
+        x1 = x0 + 72
+        # çerçeve
+        T[196:386, x0 - 4:x1 + 4] = 1.0
+        T[196:200, x0 - 4:x1 + 4] = 0.80
+        # cam
+        yy, xx = np.mgrid[0:182, 0:72]
+        g = 0.40 + 0.12 * (yy / 182.0)
+        g += 0.22 * np.clip(1 - np.abs((xx + yy * 0.6) % 60 - 12) / 7, 0, 1) * 0.55
+        g += 0.12 * np.clip(1 - np.abs((xx + yy * 0.6 + 30) % 60 - 12) / 3, 0, 1)
+        T[200:382, x0:x1] = g
+        T[200:382, x0 + 34:x0 + 38] = 0.95  # orta çıta
+    band(T, 386, 396, 0.98); band(T, 396, 400, 0.70)  # denizlik
+    T[400:416, :] = 0.74  # etek
+    return T
+
+
+WALLS["shop"] = w_shop
+
+
 def make_wall(kind):
     T = np.clip(WALLS[kind](7 + len(kind)), 0, 1)
     g = (T * 255).astype(np.uint8)
@@ -395,11 +459,66 @@ def make_wall(kind):
     print("ok wall", kind, flush=True)
 
 
+# ---------------------------- tabela levhası (3 dilimli: sol kapak | orta | sağ kapak) ----------------------------
+SW, SH, CAP = 384, 96, 28
+
+
+def make_sign():
+    """sign_panel.png: gri tonlu levha (oyun bg rengiyle çarpar); sign_frame.png: çerçeve + cıvata + ampuller (kenar rengiyle çarpar)."""
+    ss = 2
+    W, H = SW * ss, SH * ss
+    yy, xx = np.mgrid[0:H, 0:W].astype(float)
+    r = 20 * ss
+    # yuvarlatılmış dikdörtgen işaretli uzaklık (iç pozitif)
+    qx = np.abs(xx - W / 2 + .5) - (W / 2 - r); qy = np.abs(yy - H / 2 + .5) - (H / 2 - r)
+    outside = np.sqrt(np.maximum(qx, 0) ** 2 + np.maximum(qy, 0) ** 2) + np.minimum(np.maximum(qx, qy), 0) - r
+    d = -outside  # kenara uzaklık (px)
+    inside = np.clip(d / 1.5 + .5, 0, 1)
+    # --- panel: hafif fırçalı metal + üst parlak bant + alt gölge
+    rng = np.random.RandomState(3)
+    brushed = ndimage.gaussian_filter(rng.rand(H, W), (0.6, 28)) - 0.5
+    g = 0.86 + 0.5 * brushed
+    g = g + 0.10 * np.clip(1 - yy / (H * .55), 0, 1) - 0.14 * np.clip((yy - H * .62) / (H * .38), 0, 1)
+    bev = np.clip(d / (6 * ss), 0, 1)  # kenar eğimi
+    g = g * (0.80 + 0.20 * bev)
+    g = np.clip(g, 0, 1)
+    pa = (inside * 255).astype(np.uint8)
+    pg = (g * 255).astype(np.uint8)
+    panel = Image.fromarray(np.dstack([pg, pg, pg, pa]), "RGBA").resize((SW, SH), Image.LANCZOS)
+    panel.save(os.path.join(OUT, "sign_panel.png"), optimize=True)
+    # --- çerçeve: iç kenarda 9px parlak halka + cıvatalar + ampuller
+    ring_o = 9 * ss; ring_i = 5 * ss
+    ring = ((d > ring_i) & (d < ring_o)).astype(float)
+    ring = ndimage.gaussian_filter(ring, 0.8)
+    top = np.clip(1 - yy / H, 0, 1)
+    fg = 0.92 + 0.08 * top - 0.18 * np.clip((yy - H * .5) / (H * .5), 0, 1)
+    fa = ring.copy(); fv = fg.copy()
+    # cıvatalar (köşeler)
+    for cx, cy in ((24 * ss, 24 * ss), (W - 24 * ss, 24 * ss), (24 * ss, H - 24 * ss), (W - 24 * ss, H - 24 * ss)):
+        dd = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        m = np.clip(5 * ss - dd, 0, 1)
+        sh = 0.55 + 0.45 * np.clip(1 - ((xx - cx + 1.5 * ss) ** 2 + (yy - cy + 1.5 * ss) ** 2) / (4 * ss) ** 2, 0, 1)
+        fa = np.maximum(fa, m); fv = np.where(m > 0, sh, fv)
+    # üst kenar ampulleri
+    for i in range(1, 12):
+        cx = W * i / 12; cy = 13 * ss
+        dd = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        m = np.clip(3.2 * ss - dd, 0, 1)
+        glow = np.clip(1 - dd / (7 * ss), 0, 1) * 0.35
+        fa = np.maximum(fa, np.maximum(m, glow)); fv = np.where(m > 0, 1.0, fv)
+    fa8 = (np.clip(fa, 0, 1) * 255).astype(np.uint8); fg8 = (np.clip(fv, 0, 1) * 255).astype(np.uint8)
+    Image.fromarray(np.dstack([fg8, fg8, fg8, fa8]), "RGBA").resize((SW, SH), Image.LANCZOS).save(os.path.join(OUT, "sign_frame.png"), optimize=True)
+    print("ok tabela", flush=True)
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "hepsi"
+    only = sys.argv[2:]  # isteğe bağlı: yalnız bu türler (var olanları yeniden üretmemek için)
     if mode in ("zemin", "hepsi"):
-        for k in KINDS:
-            make_floor(k)
+        for k in (only or KINDS):
+            if k in KINDS: make_floor(k)
+    if mode in ("tabela", "hepsi"):
+        make_sign()
     if mode in ("duvar", "hepsi"):
-        for k in WALLS:
-            make_wall(k)
+        for k in (only or WALLS):
+            if k in WALLS: make_wall(k)

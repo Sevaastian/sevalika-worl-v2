@@ -106,14 +106,14 @@ export const hasLayeredBack = (id: string | null | undefined) => inList(LAYERED_
 
 export function bodyLayers(opts: {
   skin: string; shirt: string; hair: string; hairStyle: string; legs: boolean; faceFront: boolean;
-  top?: string | null; hat?: string | null; glasses?: string | null; back?: string | null;
+  top?: string | null; hat?: string | null; glasses?: string | null; back?: string | null; legTint?: string | null;
 }): LayerSpec[] {
   const base = "/sprites/avatar3/";
   const style = KNOWN_HAIR.includes(opts.hairStyle) ? opts.hairStyle : "hs_short";
   const out: LayerSpec[] = [];
   if (hasLayeredBack(opts.back)) out.push({ src: `${base}${opts.back}.png`, tint: null });
   if (opts.legs) {
-    out.push({ src: base + "legs.png", tint: null });
+    out.push({ src: base + "legs.png", tint: opts.legTint ?? null });
     out.push({ src: base + "shoes.png", tint: null });
   }
   out.push({ src: base + "body.png", tint: opts.skin });

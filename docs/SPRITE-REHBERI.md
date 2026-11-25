@@ -139,3 +139,19 @@ Yeni: stall_red, stall_blue, flower_bed, bus_stop, billboard, clock_tower, fount
 - Bank 3D modeli 1.3x büyütüldü (tools/gen_furni3d.py `SCALE`), oturma yüksekliği `SEAT_AY.bench = -5`.
 - Renkli karakter parçaları artık tüm sheet yerine yalnız kullanılan kare için boyanıyor (yüzlerce MB bellek tasarrufu).
 - Ortalama fps ~30'un altına düşerse oyun kendiliğinden düşük kaliteye geçer (parçacık yok, çözünürlük 1x).
+
+## 12. v38 — ağaç, palmiye ve büyük yapılar (toplam 47 tür)
+Yeni: tree, palm, beach_cafe, dj_booth, tiki_bar, casino_bar, fish_hut, mine_entrance, store_fashion, store_tech, store_food, kitchen_block, barn; ayrıca park halindeki arabalar (car_red/blue/yellow, trafik sheet'i).
+- Yapılarda ön yüz -x'tir (rot 0'da kameraya bakar). billboard ve bus_stop v33'te ters çıkmıştı, aynalanarak düzeltildi (`MIRROR`).
+- Hâlâ vektör: su, Parti/Hain zeminleri, Cadde cepheleri.
+
+## 13. v39 — kalan vektörler PNG oldu
+- Yeni zemin türleri (tools/gen_tiles.py): `neon` (Oyunika/Parti/Tetris), `metal` (Hain Avı), `snow` (Kış Köyü), `water` (4 kare animasyonlu deniz; kıyı köpüğü hâlâ canlı vektör).
+- Yeni duvar türü `shop`: Cadde mağaza cepheleri (taç silme + iki camlı vitrin modülü), cam içi sıcak ışık kodla eklenir.
+- Mevcut dokuları bozmamak için üretici artık tür adı alır: `python3 tools/gen_tiles.py zemin neon metal` (adsız çalıştırırsan tümü yeniden üretilir ve rastgele tohum yüzünden değişir).
+- Hâlâ vektör: tabela/yazılar (dinamik metin), Sahil/İskele/Restoran/Çiftlik sağ duvar küçük binaları (`drawRightWallBuilding`).
+
+## 14. v40 — tabelalar ve duvar binaları
+- Tabela levhası PNG: `sign_panel.png` (bg rengiyle boyanır) + `sign_frame.png` (çerçeve, cıvata, ampul; border rengiyle boyanır), 3 dilimli (`drawSignPlate`, lib/tiles.ts). Yazı dinamik olduğu için kodla basılır. Üretim: `python3 tools/gen_tiles.py tabela`.
+- `drawRightWallBuilding` (İskele/Restoran/Çiftlik) artık duvara paralel (eğik) çiziliyor ve `shop` duvar dokusunu kullanıyor.
+- Vektör olarak yalnız yazılar ve panoramik pencereler kaldı.

@@ -344,3 +344,9 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - v33: 8 çok karolu 4 yönlü 3D eşya (tezgâhlar, çiçeklik, durak, pano, saat kulesi, büyük çeşme, yemek aracı); toplam 31 tür.
 - v34 (performans): ekran dışı karo/duvar/eşya/araç çizilmiyor (lib/view.ts), büyük sprite sheet'leri için küçültülmüş kopya + kare önbelleği (lib/mip.ts). Kare başına JS çizim süresi ~2 ms.
 - v35: bank 1.3x, karakter boyama kare bazlı (bellek), yavaş cihazda otomatik düşük kalite.
+- v36: ?fps teşhis göstergesi (adres sonuna ?fps ekle): fps, güncelle/çiz ms, en kötü kare, oyuncu/eşya sayısı, kalite modu.
+- v37: park halindeki arabalar (car_red/blue/yellow) 4 yönlü 3D araç sheet'iyle; FURNI_DIRS + rotate_furni güncellendi (toplam 34 tür).
+- v38: ağaç, palmiye, 11 büyük yapı 4 yönlü 3D (toplam 47 tür); billboard/bus_stop yönü düzeltildi.
+- v39: zeminler neon/metal/snow, PNG su (animasyonlu), Cadde mağaza cepheleri PNG duvar dokusu.
+- v40: PNG tabela levhaları (ampullü), duvar binaları eğik/dokulu.
+- v41: Sevaastian ve Vistekiis artık 3D katmanlı karakterle çiziliyor (4 yön, yürüme, oturma); siyah kıyafet, Sevaastian varsayılan takım elbise + koyu gözlük, Vistekiis uzun siyah saç. Kozmetikleri korunur; katman yüklenmezse eski vektör çizim yedek.
