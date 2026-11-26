@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { GameEvent, PopularHome } from "@/lib/types";
+import type { GameEvent, NewsPost, PopularHome } from "@/lib/types";
 import type { TetrisBoardData } from "./TetrisArena";
 
 const HEADLINES = [
@@ -79,6 +79,12 @@ export default function NewspaperModal({
   holding,
   onToggleHold,
   onClose,
+  fetchNews,
+  canWrite,
+  isAdmin,
+  autoWrite,
+  onSubmitNews,
+  onDeleteNews,
 }: {
   me: string;
   events: GameEvent[];
@@ -87,7 +93,25 @@ export default function NewspaperModal({
   holding: boolean;
   onToggleHold: () => void;
   onClose: () => void;
+  /** Muhabir haberleri (v42) */
+  fetchNews?: () => Promise<NewsPost[]>;
+  canWrite?: boolean;
+  isAdmin?: boolean;
+  autoWrite?: boolean;
+  onSubmitNews?: (title: string, body: string) => Promise<void>;
+  onDeleteNews?: (id: number) => Promise<void>;
 }) {
+  const [news, setNews] = useState<NewsPost[]>([]);
+  const [writing, setWriting] = useState(Boolean(autoWrite));
+  const [nTitle, setNTitle] = useState("");
+  const [nBody, setNBody] = useState("");
+  const [nBusy, setNBusy] = useState(false);
+  const [nErr, setNErr] = useState("");
+  const reloadNews = () => {
+    if (fetchNews) void fetchNews().then(setNews).catch(() => {});
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reloadNews, []);
   const [homes, setHomes] = useState<PopularHome[]>([]);
   const [tetris, setTetris] = useState<TetrisBoardData | null>(null);
   const [sign, setSign] = useState(0);
@@ -139,6 +163,62 @@ export default function NewspaperModal({
                 Gelişmeleri takip etmeye devam edeceğiz; bu arada çayınızı tazeleyin.
               </p>
             </div>
+
+            {(news.length > 0 || canWrite) && (
+              <div className="border-b-2 border-stone-700 pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-sans font-black uppercase tracking-widest text-red-700">📰 Muhabir Haberleri</div>
+                  {canWrite && onSubmitNews && (
+                    <button onClick={() => setWriting((w) => !w)} className="text-[10px] font-sans font-bold bg-stone-800 text-stone-100 rounded px-2 py-0.5">
+                      {writing ? "Vazgeç" : "✍️ Haber Yaz"}
+                    </button>
+                  )}
+                </div>
+                {writing && canWrite && onSubmitNews && (
+                  <div className="mt-1.5 space-y-1 font-sans">
+                    <input value={nTitle} maxLength={60} onChange={(e) => setNTitle(e.target.value)} placeholder="Başlık" className="w-full border border-stone-500 bg-stone-50/80 rounded px-2 py-1 text-sm" />
+                    <textarea value={nBody} maxLength={400} onChange={(e) => setNBody(e.target.value)} placeholder="Haber metni (10-400 karakter)" rows={3} className="w-full border border-stone-500 bg-stone-50/80 rounded px-2 py-1 text-sm" />
+                    {nErr && <div className="text-[11px] text-red-700">{nErr}</div>}
+                    <button
+                      disabled={nBusy}
+                      onClick={async () => {
+                        setNBusy(true);
+                        setNErr("");
+                        try {
+                          await onSubmitNews(nTitle, nBody);
+                          setNTitle("");
+                          setNBody("");
+                          setWriting(false);
+                          reloadNews();
+                        } catch (e) {
+                          setNErr(e instanceof Error ? e.message : "Haber gönderilemedi.");
+                        } finally {
+                          setNBusy(false);
+                        }
+                      }}
+                      className="text-xs font-bold bg-red-700 text-white rounded px-3 py-1 disabled:opacity-50"
+                    >
+                      Yayınla (+40 Sanil)
+                    </button>
+                  </div>
+                )}
+                {news.length === 0 && !writing && <div className="text-[12px] italic text-stone-600">Henüz muhabir haberi yok.</div>}
+                {news.map((n) => (
+                  <div key={n.id} className="mt-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-[15px] font-black leading-tight">{n.title}</h3>
+                      {isAdmin && onDeleteNews && (
+                        <button onClick={() => void onDeleteNews(n.id).then(reloadNews)} className="text-[10px] font-sans text-red-700 shrink-0">
+                          Sil
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[12.5px] leading-snug text-stone-800">{n.body}</p>
+                    <div className="text-[10px] font-sans text-stone-500">Muhabir: {n.author}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div>
               <div className="text-[11px] font-sans font-black uppercase tracking-widest text-stone-700">🧱 Blok Rüzgârı Rekorları</div>

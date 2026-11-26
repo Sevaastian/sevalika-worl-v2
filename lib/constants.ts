@@ -1,5 +1,5 @@
 import { HAIN_COLS, HAIN_ROWS, HAIN_SPAWN, HAIN_FURNI, HAIN_WALLS } from "./hain";
-import type { FurniItem, FurniType, NpcKind, OyunikaCell, OyunikaCellKind, RoomDef, RoomTheme, UserRole } from "./types";
+import type { FurniItem, FurniType, NpcKind, OyunikaCell, OyunikaCellKind, Profession, ProfFxKind, RoomDef, RoomTheme, UserRole } from "./types";
 
 export const BASE_TILE_W = 64;
 export const BASE_TILE_H = 32;
@@ -21,6 +21,51 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 };
 
 export const canRideHorse = (role: UserRole) => ROLE_RANK[role] >= ROLE_RANK.suvari;
+
+/* ---------------- Meslekler (v42) ---------------- */
+export interface ProfessionDef {
+  key: Profession;
+  name: string;
+  icon: string;
+  /** Kuşanılan el eşyasının kimliği (profiles.tool) */
+  tool: string;
+  toolName: string;
+  color: string;
+  desc: string;
+  /** Aktif kullanım butonu */
+  action: string;
+  fx: ProfFxKind | null;
+}
+
+export const PROFESSIONS: Record<Profession, ProfessionDef> = {
+  suvari: { key: "suvari", name: "Süvari", icon: "🐎", tool: "sancak", toolName: "Süvari Sancağı", color: "#38bdf8", desc: "Asil muhafız ve binekli elit sınıf: devriye, kortej liderliği, VIP alan erişimi.", action: "🚩 Sancak Salla", fx: "banner" },
+  rehber: { key: "rehber", name: "Rehber", icon: "🧭", tool: "pusula", toolName: "Altın Pusula", color: "#fbbf24", desc: "Yeni oyunculara Sevalika'yı tanıtır; tur tamamlayınca ikisi de Sanil + XP kazanır.", action: "📍 Toplanma İşareti", fx: "marker" },
+  sanatci: { key: "sanatci", name: "Sanatçı", icon: "🎨", tool: "palet", toolName: "Boya Paleti", color: "#f472b6", desc: "Tablo çizer; tabloları eve asar veya Pazarda satar.", action: "🖌️ Resim Çiz", fx: "paint" },
+  muzisyen: { key: "muzisyen", name: "Müzisyen", icon: "🎶", tool: "gitar", toolName: "Elektro Gitar", color: "#a78bfa", desc: "Sahnede çalar, çevresindekileri dans ettirir, bahşiş ve alkış toplar.", action: "🎸 Müzik Çal", fx: "music" },
+  gazeteci: { key: "gazeteci", name: "Gazeteci", icon: "📰", tool: "kamera", toolName: "Fotoğraf Makinesi", color: "#e2e8f0", desc: "Haberleri Sevalika Günlüğü'ne taşır, kare yakalar.", action: "📸 Flaş Patlat", fx: "flash" },
+  yonetmen: { key: "yonetmen", name: "Yönetmen", icon: "🎬", tool: "klaket", toolName: "Yönetmen Klaketi", color: "#fb7185", desc: "Figüran davet eder, sahne çeker; herkes toplu ödül alır.", action: "🎬 Klaket Vur", fx: "clap" },
+};
+export const PROFESSION_LIST = Object.values(PROFESSIONS);
+export const PROF_TOOL_IDS = PROFESSION_LIST.map((d) => d.tool);
+export const PROF_BY_TOOL = Object.fromEntries(PROFESSION_LIST.map((d) => [d.tool, d.key])) as Record<string, Profession>;
+
+/** Geçerli meslek: Süvari rütbesi = Süvari mesleği */
+export const effProfession = (role: UserRole, profession?: Profession | null): Profession | null => (role === "suvari" ? "suvari" : profession ?? null);
+
+/** Meslek aletini kullanabilir mi? (admin hepsini) */
+export const canUseProfTool = (role: UserRole, profession: Profession | null | undefined, tool: string): boolean => role === "admin" || effProfession(role, profession) === PROF_BY_TOOL[tool];
+
+export const PROF_FX_KINDS: ProfFxKind[] = ["flash", "marker", "clap", "music", "banner", "paint"];
+export const PROF_FX_DURATION: Record<ProfFxKind, number> = { flash: 700, marker: 25000, clap: 3600, music: 25000, banner: 4500, paint: 3200 };
+export const PROF_FX_TEXT: Record<ProfFxKind, string> = {
+  flash: "",
+  marker: "📍 Buraya Toplanın!",
+  clap: "🎬 3, 2, 1... Kayıt!",
+  music: "",
+  banner: "⚔️ Yol açın! Süvari devriyesi!",
+  paint: "🎨 Yeni bir eser!",
+};
+export const FX_PROF: Record<ProfFxKind, Profession> = { flash: "gazeteci", marker: "rehber", clap: "yonetmen", music: "muzisyen", banner: "suvari", paint: "sanatci" };
 export const canWhisper = (role: UserRole) => ROLE_RANK[role] >= ROLE_RANK.vip;
 
 export interface FurniDef {
@@ -38,6 +83,8 @@ export interface FurniDef {
   /** Çok kareli yapılar için genişlik (gx) ve derinlik (gy) */
   wTiles?: number;
   hTiles?: number;
+  /** Sanatçı tablosu: katalogdan alınamaz, sadece Sanatçı üretir */
+  artwork?: boolean;
 }
 
 export const FURNI_CATALOG: FurniDef[] = [
@@ -61,6 +108,10 @@ export const FURNI_CATALOG: FurniDef[] = [
   { type: "bin", name: "Çöp Kutusu", icon: "🗑️", desc: "Belediye çöp kutusu.", price: 40, blocks: true, sittable: false, floor: false },
   { type: "kiosk", name: "Gazete Büfesi", icon: "🏪", desc: "Cadde büfesi.", price: 320, blocks: true, sittable: false, floor: false },
   { type: "rug", name: "Kırmızı Halı", icon: "🟥", desc: "Zemin halısı, üstünden geçilir.", price: 50, blocks: false, sittable: false, floor: true },
+  { type: "art_landscape", name: "Tablo: Dağ Manzarası", icon: "🏔️", desc: "Sanatçı elinden şövaleli tablo.", price: 150, blocks: true, sittable: false, floor: false, artwork: true },
+  { type: "art_portrait", name: "Tablo: Portre", icon: "🖼️", desc: "Sanatçı elinden şövaleli tablo.", price: 150, blocks: true, sittable: false, floor: false, artwork: true },
+  { type: "art_abstract", name: "Tablo: Soyut", icon: "🎨", desc: "Sanatçı elinden şövaleli tablo.", price: 150, blocks: true, sittable: false, floor: false, artwork: true },
+  { type: "art_sea", name: "Tablo: Deniz Feneri", icon: "🌊", desc: "Sanatçı elinden şövaleli tablo.", price: 150, blocks: true, sittable: false, floor: false, artwork: true },
   { type: "bookshelf", name: "Kitaplık", icon: "📚", desc: "Rengarenk kitaplı raf.", price: 120, blocks: true, sittable: false, floor: false },
   { type: "tv", name: "Plazma TV", icon: "📺", desc: "Canlı renkli ekran.", price: 200, blocks: true, sittable: false, floor: false },
   { type: "fountain", name: "Neon Havuz", icon: "⛲", desc: "Akan sulu süs havuzu.", price: 250, blocks: true, sittable: false, floor: false },
@@ -160,6 +211,15 @@ export const RECIPES: { dish: string; needs: string[] }[] = [
 export const ROOM_ROCKS: Record<string, [number, number][]> = {
   maden: [[3, 3], [3, 8], [8, 3], [8, 8], [5, 5]],
 };
+/** Resimli arka planlı odalarda binaların kapladığı, yürünemeyen kareler (dikdörtgenler: x0,y0,x1,y1 dahil) */
+const rectTiles = (x0: number, y0: number, x1: number, y1: number): [number, number][] => {
+  const out: [number, number][] = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) out.push([x, y]);
+  return out;
+};
+export const ROOM_BLOCK: Record<string, [number, number][]> = {
+  "cadde-2": [...rectTiles(2, 0, 10, 3), ...rectTiles(14, 0, 21, 3), ...rectTiles(0, 4, 2, 6)],
+};
 export const MINE_REACH = 2.2;
 export const MINE_COOLDOWN_MS = 2600;
 export const REPORT_POS_MS = 2500;
@@ -254,6 +314,7 @@ export const ROOMS: RoomDef[] = [
       { gx: 11, gy: 0, to: "avm", label: "🛍️ Sevalika AVM" },
       { gx: 6, gy: 21, to: "emlak-ofisi", label: "🏡 Emlak Ofisi" },
       { gx: 33, gy: 17, to: "kis-koyu", label: "❄️ Kış Köyü" },
+      { gx: 33, gy: 8, to: "cadde-2", label: "🏙️ Cadde 2" },
       { gx: 20, gy: 0, to: "oyunika", label: "🎮 Oyunika" },
     ],
     defaultFurni: [
@@ -373,6 +434,48 @@ export const ROOMS: RoomDef[] = [
       f("c114", "table", 31, 15),
       f("c115", "chair", 30, 15),
       f("c116", "chair", 32, 15),
+    ],
+  },
+  {
+    slug: "cadde-2",
+    name: "🏙️ Cadde 2 (Test)",
+    minRole: "user",
+    cols: 26,
+    rows: 18,
+    theme: { floorA: "#f4e0aa", floorB: "#eed8a0", wallLeft: "#c9785a", wallRight: "#e9d9b8", accent: "#38bdf8" },
+    spawn: { gx: 12, gy: 6 },
+    portals: [{ gx: 0, gy: 9, to: "cadde-1", label: "Cadde 1" }],
+    defaultFurni: [
+      f("d1", "streetlight", 3, 7),
+      f("d2", "streetlight", 9, 7),
+      f("d3", "streetlight", 16, 7),
+      f("d4", "streetlight", 22, 7),
+      f("d5", "streetlight", 6, 12),
+      f("d6", "streetlight", 13, 12),
+      f("d7", "streetlight", 20, 12),
+      f("d8", "bin", 6, 7),
+      f("d9", "bin", 18, 7),
+      f("d10", "bin", 9, 12),
+      f("d11", "bench", 7, 13, 1),
+      f("d12", "bench", 16, 13, 1),
+      f("d13", "bus_stop", 23, 6),
+      f("d14", "car_red", 8, 11),
+      f("d15", "car_blue", 17, 8),
+      f("d16", "tree", 2, 16),
+      f("d17", "tree", 24, 16),
+      f("d18", "tree", 6, 15),
+      f("d19", "tree", 9, 16),
+      f("d20", "tree", 1, 13),
+      f("d21", "plant", 4, 4),
+      f("d22", "plant", 9, 4),
+      f("d23", "plant", 12, 5),
+      f("d24", "flower_bed", 12, 6),
+      f("d25", "flower_bed", 15, 5),
+      f("d26", "bench", 20, 16, 1),
+      f("d27", "bench", 22, 16, 1),
+      f("d28", "plant", 23, 15),
+      f("d29", "lamp", 19, 14),
+      f("d30", "lamp", 24, 14),
     ],
   },
   {

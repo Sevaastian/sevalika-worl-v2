@@ -88,6 +88,13 @@ alter table public.profiles add column if not exists muted_until timestamptz;
 alter table public.profiles add column if not exists last_seen timestamptz;
 alter table public.profiles add column if not exists current_room text;
 alter table public.profiles add column if not exists last_quiz_try timestamptz;
+-- v42: meslekler
+alter table public.profiles add column if not exists profession text;
+alter table public.profiles drop constraint if exists profiles_profession_check;
+alter table public.profiles add constraint profiles_profession_check check (profession is null or profession in ('rehber','sanatci','muzisyen','gazeteci','yonetmen'));
+alter table public.profiles add column if not exists prof_points int not null default 0;
+-- v44: bildirim merkezi (okundu işareti = en son görülen user_events.id)
+alter table public.profiles add column if not exists notif_seen_id bigint not null default 0;
 
 alter table public.rooms add column if not exists owner_id uuid references public.profiles(id) on delete cascade;
 alter table public.rooms add column if not exists access text not null default 'open' check (access in ('open','friends','closed'));
@@ -209,6 +216,10 @@ create or replace function public.furni_price(p_type text) returns int
 language sql immutable set search_path = '' as $$
   select case p_type
     when 'sofa' then 150
+    when 'art_landscape' then 150
+    when 'art_portrait' then 150
+    when 'art_abstract' then 150
+    when 'art_sea' then 150
     when 'chair' then 70
     when 'bench' then 110
     when 'lounger' then 130
@@ -333,7 +344,8 @@ begin
     'daily_streak', case when me.last_daily_claim is null or me.last_daily_claim <= now() - interval '48 hours' then 0 else me.daily_streak end,
     'streak_next', public._streak_next(me.last_daily_claim, me.daily_streak),
     'kicked_until', me.kicked_until, 'muted_until', me.muted_until, 'tool', me.tool,
-    'xp', me.xp, 'pet', me.pet, 'room', me.current_room
+    'xp', me.xp, 'pet', me.pet, 'room', me.current_room,
+    'profession', me.profession, 'prof_points', me.prof_points
   );
 end $$;
 
@@ -414,6 +426,7 @@ begin
   me := public._me();
   price := public.furni_price(p_type);
   if price is null then raise exception 'Bilinmeyen eşya.'; end if;
+  if p_type like 'art\_%' then raise exception 'Tablolar sadece Sanatçılar tarafından çizilir.'; end if;
   select * into r from public.rooms where slug = p_room for update;
   if not found then raise exception 'Oda bulunamadı.'; end if;
   if public.role_rank(me.role) < public.role_rank(r.min_role) then raise exception 'Bu odaya erişimin yok.'; end if;
@@ -687,7 +700,9 @@ begin
   else
     inv := array_remove(inv, 'suvari_ati');
   end if;
-  update public.profiles set role = p_role, inventory = inv where id = t.id;
+  update public.profiles set role = p_role, inventory = inv,
+         tool = case when tool = 'sancak' and p_role not in ('suvari','admin') then null else tool end
+   where id = t.id;
   perform public._emit_event('role', null, t.username, jsonb_build_object('role', p_role), me.username);
   perform public._log(me.username, 'role', t.username, p_role);
 end $$;
@@ -764,8 +779,11 @@ end $$;
 create or replace function public._emit_user_event(p_target uuid, p_kind text, p_payload jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
-  delete from public.user_events where created_at < now() - interval '1 day';
+  delete from public.user_events where created_at < now() - interval '14 days';
   insert into public.user_events (target_id, kind, payload) values (p_target, p_kind, coalesce(p_payload, '{}'::jsonb));
+  -- kişi başı en fazla 150 kayıt tut (bildirim merkezi geçmişi)
+  delete from public.user_events where target_id = p_target
+    and id < coalesce((select min(id) from (select id from public.user_events where target_id = p_target order by id desc limit 150) x), 0);
 end $$;
 
 create or replace function public._find_user(p_username text) returns public.profiles
@@ -1352,7 +1370,7 @@ end $$;
 alter table public.profiles add column if not exists tool text;
 alter table public.profiles add column if not exists last_fish timestamptz;
 alter table public.profiles drop constraint if exists profiles_tool_check;
-alter table public.profiles add constraint profiles_tool_check check (tool is null or tool in ('fishing_rod', 'newspaper'));
+alter table public.profiles add constraint profiles_tool_check check (tool is null or tool in ('fishing_rod', 'newspaper', 'sancak', 'pusula', 'palet', 'gitar', 'kamera', 'klaket'));
 
 insert into public.rooms (slug, name, min_role, furni) values
   ('iskele', 'Sahil İskelesi', 'user', '[
@@ -1399,8 +1417,9 @@ declare me public.profiles;
 begin
   me := public._me();
   if p_tool is not null then
-    if p_tool not in ('fishing_rod', 'newspaper') then raise exception 'Geçersiz alet.'; end if;
+    if p_tool not in ('fishing_rod', 'newspaper', 'sancak', 'pusula', 'palet', 'gitar', 'kamera', 'klaket') then raise exception 'Geçersiz alet.'; end if;
     if p_tool = 'fishing_rod' and not ('fishing_rod' = any(me.inventory)) then raise exception 'Oltan yok.'; end if;
+    if public._tool_prof(p_tool) is not null and not public._has_prof(me, public._tool_prof(p_tool)) then raise exception 'Bu alet mesleğine uygun değil.'; end if;
   end if;
   update public.profiles set tool = p_tool where id = me.id;
   return p_tool;
@@ -1852,7 +1871,8 @@ insert into public.rooms (slug, name, min_role, cols, rows, spawn_x, spawn_y, fu
 ('avm', '🛍️ Sevalika AVM', 'user', 28, 20, 13, 17, '[{"id":"av_s0","type":"store_fashion","gx":1,"gy":0,"rot":0,"owner":null},{"id":"av_s1","type":"store_tech","gx":6,"gy":0,"rot":0,"owner":null},{"id":"av_s2","type":"store_food","gx":11,"gy":0,"rot":0,"owner":null},{"id":"av_s3","type":"store_fashion","gx":16,"gy":0,"rot":0,"owner":null},{"id":"av_s4","type":"store_tech","gx":21,"gy":0,"rot":0,"owner":null},{"id":"av_p0","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"av_p1","type":"plant","gx":5,"gy":2,"rot":0,"owner":null},{"id":"av_p2","type":"plant","gx":10,"gy":2,"rot":0,"owner":null},{"id":"av_p3","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"av_p4","type":"plant","gx":20,"gy":2,"rot":0,"owner":null},{"id":"av_p5","type":"plant","gx":25,"gy":2,"rot":0,"owner":null},{"id":"av_p6","type":"plant","gx":27,"gy":2,"rot":0,"owner":null},{"id":"av_m1","type":"mannequin","gx":0,"gy":3,"rot":0,"owner":null},{"id":"av_m2","type":"mannequin","gx":5,"gy":3,"rot":0,"owner":null},{"id":"av_m3","type":"mannequin","gx":16,"gy":3,"rot":0,"owner":null},{"id":"av_m4","type":"mannequin","gx":21,"gy":3,"rot":0,"owner":null},{"id":"av_f1","type":"fountain","gx":13,"gy":9,"rot":0,"owner":null},{"id":"av_b0","type":"bench","gx":11,"gy":8,"rot":1,"owner":null},{"id":"av_b1","type":"bench","gx":15,"gy":8,"rot":1,"owner":null},{"id":"av_b2","type":"bench","gx":11,"gy":11,"rot":1,"owner":null},{"id":"av_b3","type":"bench","gx":15,"gy":11,"rot":1,"owner":null},{"id":"av_b4","type":"bench","gx":8,"gy":5,"rot":1,"owner":null},{"id":"av_b5","type":"bench","gx":19,"gy":5,"rot":1,"owner":null},{"id":"av_b6","type":"bench","gx":8,"gy":14,"rot":1,"owner":null},{"id":"av_b7","type":"bench","gx":19,"gy":14,"rot":1,"owner":null},{"id":"av_pl0","type":"plant","gx":7,"gy":9,"rot":0,"owner":null},{"id":"av_pl1","type":"plant","gx":20,"gy":9,"rot":0,"owner":null},{"id":"av_pl2","type":"plant","gx":9,"gy":16,"rot":0,"owner":null},{"id":"av_pl3","type":"plant","gx":18,"gy":16,"rot":0,"owner":null},{"id":"av_pl4","type":"plant","gx":7,"gy":17,"rot":0,"owner":null},{"id":"av_pl5","type":"plant","gx":20,"gy":17,"rot":0,"owner":null},{"id":"av_l0","type":"lamp","gx":6,"gy":3,"rot":0,"owner":null},{"id":"av_l1","type":"lamp","gx":22,"gy":3,"rot":0,"owner":null},{"id":"av_l2","type":"lamp","gx":10,"gy":6,"rot":0,"owner":null},{"id":"av_l3","type":"lamp","gx":17,"gy":6,"rot":0,"owner":null},{"id":"av_l4","type":"lamp","gx":3,"gy":9,"rot":0,"owner":null},{"id":"av_l5","type":"lamp","gx":24,"gy":9,"rot":0,"owner":null},{"id":"av_l6","type":"lamp","gx":3,"gy":15,"rot":0,"owner":null},{"id":"av_l7","type":"lamp","gx":24,"gy":15,"rot":0,"owner":null},{"id":"av_l8","type":"lamp","gx":12,"gy":13,"rot":0,"owner":null},{"id":"av_l9","type":"lamp","gx":14,"gy":13,"rot":0,"owner":null},{"id":"av_t1","type":"table","gx":24,"gy":6,"rot":0,"owner":null},{"id":"av_c1","type":"chair","gx":23,"gy":6,"rot":0,"owner":null},{"id":"av_c2","type":"chair","gx":25,"gy":6,"rot":0,"owner":null},{"id":"av_t2","type":"table","gx":3,"gy":6,"rot":0,"owner":null},{"id":"av_c3","type":"chair","gx":2,"gy":6,"rot":0,"owner":null},{"id":"av_c4","type":"chair","gx":4,"gy":6,"rot":0,"owner":null}]'::jsonb, 10),
   ('avm-kat2', '🛍️ AVM · 2. Kat', 'user', 26, 18, 2, 8, '[{"id":"k2_s0","type":"store_fashion","gx":1,"gy":0,"rot":0,"owner":null},{"id":"k2_s1","type":"store_tech","gx":6,"gy":0,"rot":0,"owner":null},{"id":"k2_s2","type":"store_food","gx":11,"gy":0,"rot":0,"owner":null},{"id":"k2_s3","type":"store_fashion","gx":16,"gy":0,"rot":0,"owner":null},{"id":"k2_s4","type":"store_food","gx":21,"gy":0,"rot":0,"owner":null},{"id":"k2_p0","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"k2_p1","type":"plant","gx":5,"gy":2,"rot":0,"owner":null},{"id":"k2_p2","type":"plant","gx":10,"gy":2,"rot":0,"owner":null},{"id":"k2_p3","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"k2_p4","type":"plant","gx":20,"gy":2,"rot":0,"owner":null},{"id":"k2_p5","type":"plant","gx":25,"gy":2,"rot":0,"owner":null},{"id":"k2_m1","type":"mannequin","gx":9,"gy":3,"rot":0,"owner":null},{"id":"k2_m2","type":"mannequin","gx":15,"gy":3,"rot":0,"owner":null},{"id":"k2_f1","type":"fountain","gx":12,"gy":10,"rot":0,"owner":null},{"id":"k2_b0","type":"bench","gx":10,"gy":9,"rot":0,"owner":null},{"id":"k2_b1","type":"bench","gx":14,"gy":9,"rot":0,"owner":null},{"id":"k2_b2","type":"bench","gx":10,"gy":11,"rot":1,"owner":null},{"id":"k2_b3","type":"bench","gx":14,"gy":11,"rot":1,"owner":null},{"id":"k2_b4","type":"bench","gx":7,"gy":6,"rot":1,"owner":null},{"id":"k2_b5","type":"bench","gx":18,"gy":6,"rot":1,"owner":null},{"id":"k2_b6","type":"bench","gx":7,"gy":13,"rot":1,"owner":null},{"id":"k2_b7","type":"bench","gx":18,"gy":13,"rot":1,"owner":null},{"id":"k2_pl0","type":"plant","gx":3,"gy":7,"rot":0,"owner":null},{"id":"k2_pl1","type":"plant","gx":22,"gy":7,"rot":0,"owner":null},{"id":"k2_pl2","type":"plant","gx":3,"gy":14,"rot":0,"owner":null},{"id":"k2_pl3","type":"plant","gx":22,"gy":14,"rot":0,"owner":null},{"id":"k2_pl4","type":"plant","gx":8,"gy":16,"rot":0,"owner":null},{"id":"k2_pl5","type":"plant","gx":17,"gy":16,"rot":0,"owner":null},{"id":"k2_l0","type":"lamp","gx":2,"gy":3,"rot":0,"owner":null},{"id":"k2_l1","type":"lamp","gx":7,"gy":3,"rot":0,"owner":null},{"id":"k2_l2","type":"lamp","gx":13,"gy":3,"rot":0,"owner":null},{"id":"k2_l3","type":"lamp","gx":18,"gy":3,"rot":0,"owner":null},{"id":"k2_l4","type":"lamp","gx":23,"gy":3,"rot":0,"owner":null},{"id":"k2_l5","type":"lamp","gx":5,"gy":9,"rot":0,"owner":null},{"id":"k2_l6","type":"lamp","gx":20,"gy":9,"rot":0,"owner":null},{"id":"k2_l7","type":"lamp","gx":5,"gy":12,"rot":0,"owner":null},{"id":"k2_l8","type":"lamp","gx":20,"gy":12,"rot":0,"owner":null},{"id":"k2_l9","type":"lamp","gx":12,"gy":15,"rot":0,"owner":null},{"id":"k2_l10","type":"lamp","gx":13,"gy":15,"rot":0,"owner":null},{"id":"k2_t1","type":"table","gx":23,"gy":9,"rot":0,"owner":null},{"id":"k2_c1","type":"chair","gx":22,"gy":9,"rot":0,"owner":null},{"id":"k2_c2","type":"chair","gx":24,"gy":9,"rot":0,"owner":null},{"id":"k2_t2","type":"table","gx":2,"gy":10,"rot":0,"owner":null},{"id":"k2_c3","type":"chair","gx":1,"gy":10,"rot":0,"owner":null},{"id":"k2_c4","type":"chair","gx":3,"gy":10,"rot":0,"owner":null}]'::jsonb, 10),
   ('emlak-ofisi', '🏡 Emlak Ofisi', 'user', 16, 12, 8, 10, '[{"id":"em1","type":"counter","gx":6,"gy":4,"rot":0,"owner":null},{"id":"em2","type":"counter","gx":7,"gy":4,"rot":0,"owner":null},{"id":"em3","type":"counter","gx":8,"gy":4,"rot":0,"owner":null},{"id":"em4","type":"counter","gx":9,"gy":4,"rot":0,"owner":null},{"id":"em5","type":"counter","gx":10,"gy":4,"rot":0,"owner":null},{"id":"em6","type":"billboard","gx":7,"gy":1,"rot":0,"owner":null},{"id":"em7","type":"bookshelf","gx":1,"gy":1,"rot":0,"owner":null},{"id":"em8","type":"bookshelf","gx":2,"gy":1,"rot":0,"owner":null},{"id":"em9","type":"bookshelf","gx":13,"gy":1,"rot":0,"owner":null},{"id":"em10","type":"bookshelf","gx":14,"gy":1,"rot":0,"owner":null},{"id":"em11","type":"lamp","gx":5,"gy":3,"rot":0,"owner":null},{"id":"em12","type":"lamp","gx":11,"gy":3,"rot":0,"owner":null},{"id":"em13","type":"sofa","gx":2,"gy":7,"rot":0,"owner":null},{"id":"em14","type":"sofa","gx":3,"gy":7,"rot":0,"owner":null},{"id":"em15","type":"table","gx":2,"gy":8,"rot":0,"owner":null},{"id":"em16","type":"sofa","gx":12,"gy":7,"rot":0,"owner":null},{"id":"em17","type":"sofa","gx":13,"gy":7,"rot":0,"owner":null},{"id":"em18","type":"table","gx":13,"gy":8,"rot":0,"owner":null},{"id":"em19","type":"plant","gx":0,"gy":2,"rot":0,"owner":null},{"id":"em20","type":"plant","gx":15,"gy":2,"rot":0,"owner":null},{"id":"em21","type":"plant","gx":0,"gy":10,"rot":0,"owner":null},{"id":"em22","type":"plant","gx":15,"gy":10,"rot":0,"owner":null},{"id":"em23","type":"plant","gx":5,"gy":8,"rot":0,"owner":null},{"id":"em24","type":"plant","gx":10,"gy":8,"rot":0,"owner":null},{"id":"em25","type":"rug","gx":7,"gy":8,"rot":0,"owner":null},{"id":"em26","type":"rug","gx":8,"gy":8,"rot":0,"owner":null},{"id":"em27","type":"rug","gx":9,"gy":8,"rot":0,"owner":null},{"id":"em28","type":"rug","gx":7,"gy":9,"rot":0,"owner":null},{"id":"em29","type":"rug","gx":8,"gy":9,"rot":0,"owner":null},{"id":"em30","type":"rug","gx":9,"gy":9,"rot":0,"owner":null}]'::jsonb, 14),
-('kis-koyu', '❄️ Kış Köyü', 'user', 22, 16, 2, 8, '[{"id":"kk1","type":"campfire","gx":6,"gy":8,"rot":0,"owner":null},{"id":"kk2","type":"logseat","gx":6,"gy":7,"rot":0,"owner":null},{"id":"kk3","type":"logseat","gx":5,"gy":8,"rot":0,"owner":null},{"id":"kk4","type":"logseat","gx":7,"gy":8,"rot":0,"owner":null},{"id":"kk5","type":"logseat","gx":6,"gy":9,"rot":0,"owner":null},{"id":"kk6","type":"tree","gx":1,"gy":1,"rot":0,"owner":null},{"id":"kk7","type":"tree","gx":4,"gy":1,"rot":0,"owner":null},{"id":"kk8","type":"tree","gx":8,"gy":1,"rot":0,"owner":null},{"id":"kk9","type":"tree","gx":12,"gy":1,"rot":0,"owner":null},{"id":"kk10","type":"tree","gx":16,"gy":1,"rot":0,"owner":null},{"id":"kk11","type":"tree","gx":20,"gy":1,"rot":0,"owner":null},{"id":"kk12","type":"tree","gx":1,"gy":14,"rot":0,"owner":null},{"id":"kk13","type":"tree","gx":20,"gy":14,"rot":0,"owner":null},{"id":"kk14","type":"tree","gx":9,"gy":13,"rot":0,"owner":null},{"id":"kk15","type":"tree","gx":3,"gy":5,"rot":0,"owner":null},{"id":"kk16","type":"kiosk","gx":3,"gy":11,"rot":0,"owner":null},{"id":"kk17","type":"stall_red","gx":5,"gy":12,"rot":0,"owner":null},{"id":"kk18","type":"table","gx":8,"gy":11,"rot":0,"owner":null},{"id":"kk19","type":"chair","gx":7,"gy":11,"rot":0,"owner":null},{"id":"kk20","type":"chair","gx":9,"gy":11,"rot":0,"owner":null},{"id":"kk21","type":"table","gx":11,"gy":10,"rot":0,"owner":null},{"id":"kk22","type":"chair","gx":10,"gy":10,"rot":0,"owner":null},{"id":"kk23","type":"chair","gx":12,"gy":10,"rot":0,"owner":null},{"id":"kk24","type":"bench","gx":11,"gy":3,"rot":0,"owner":null},{"id":"kk25","type":"bench","gx":13,"gy":3,"rot":0,"owner":null},{"id":"kk26","type":"bench","gx":15,"gy":3,"rot":0,"owner":null},{"id":"kk27","type":"bench","gx":17,"gy":3,"rot":0,"owner":null},{"id":"kk28","type":"bench","gx":12,"gy":12,"rot":1,"owner":null},{"id":"kk29","type":"bench","gx":14,"gy":12,"rot":1,"owner":null},{"id":"kk30","type":"bench","gx":16,"gy":12,"rot":1,"owner":null},{"id":"kk31","type":"lamp","gx":10,"gy":4,"rot":0,"owner":null},{"id":"kk32","type":"lamp","gx":19,"gy":4,"rot":0,"owner":null},{"id":"kk33","type":"lamp","gx":10,"gy":11,"rot":0,"owner":null},{"id":"kk34","type":"lamp","gx":19,"gy":11,"rot":0,"owner":null},{"id":"kk35","type":"streetlight","gx":2,"gy":6,"rot":0,"owner":null},{"id":"kk36","type":"streetlight","gx":2,"gy":10,"rot":0,"owner":null},{"id":"kk37","type":"streetlight","gx":9,"gy":7,"rot":0,"owner":null},{"id":"kk38","type":"streetlight","gx":9,"gy":9,"rot":0,"owner":null},{"id":"kk39","type":"bin","gx":20,"gy":7,"rot":0,"owner":null},{"id":"kk40","type":"bin","gx":4,"gy":12,"rot":0,"owner":null},{"id":"kk41","type":"plant","gx":20,"gy":9,"rot":0,"owner":null},{"id":"kk42","type":"plant","gx":18,"gy":14,"rot":0,"owner":null},{"id":"kk43","type":"fountain","gx":21,"gy":8,"rot":0,"owner":null}]'::jsonb, 1)
+('kis-koyu', '❄️ Kış Köyü', 'user', 22, 16, 2, 8, '[{"id":"kk1","type":"campfire","gx":6,"gy":8,"rot":0,"owner":null},{"id":"kk2","type":"logseat","gx":6,"gy":7,"rot":0,"owner":null},{"id":"kk3","type":"logseat","gx":5,"gy":8,"rot":0,"owner":null},{"id":"kk4","type":"logseat","gx":7,"gy":8,"rot":0,"owner":null},{"id":"kk5","type":"logseat","gx":6,"gy":9,"rot":0,"owner":null},{"id":"kk6","type":"tree","gx":1,"gy":1,"rot":0,"owner":null},{"id":"kk7","type":"tree","gx":4,"gy":1,"rot":0,"owner":null},{"id":"kk8","type":"tree","gx":8,"gy":1,"rot":0,"owner":null},{"id":"kk9","type":"tree","gx":12,"gy":1,"rot":0,"owner":null},{"id":"kk10","type":"tree","gx":16,"gy":1,"rot":0,"owner":null},{"id":"kk11","type":"tree","gx":20,"gy":1,"rot":0,"owner":null},{"id":"kk12","type":"tree","gx":1,"gy":14,"rot":0,"owner":null},{"id":"kk13","type":"tree","gx":20,"gy":14,"rot":0,"owner":null},{"id":"kk14","type":"tree","gx":9,"gy":13,"rot":0,"owner":null},{"id":"kk15","type":"tree","gx":3,"gy":5,"rot":0,"owner":null},{"id":"kk16","type":"kiosk","gx":3,"gy":11,"rot":0,"owner":null},{"id":"kk17","type":"stall_red","gx":5,"gy":12,"rot":0,"owner":null},{"id":"kk18","type":"table","gx":8,"gy":11,"rot":0,"owner":null},{"id":"kk19","type":"chair","gx":7,"gy":11,"rot":0,"owner":null},{"id":"kk20","type":"chair","gx":9,"gy":11,"rot":0,"owner":null},{"id":"kk21","type":"table","gx":11,"gy":10,"rot":0,"owner":null},{"id":"kk22","type":"chair","gx":10,"gy":10,"rot":0,"owner":null},{"id":"kk23","type":"chair","gx":12,"gy":10,"rot":0,"owner":null},{"id":"kk24","type":"bench","gx":11,"gy":3,"rot":0,"owner":null},{"id":"kk25","type":"bench","gx":13,"gy":3,"rot":0,"owner":null},{"id":"kk26","type":"bench","gx":15,"gy":3,"rot":0,"owner":null},{"id":"kk27","type":"bench","gx":17,"gy":3,"rot":0,"owner":null},{"id":"kk28","type":"bench","gx":12,"gy":12,"rot":1,"owner":null},{"id":"kk29","type":"bench","gx":14,"gy":12,"rot":1,"owner":null},{"id":"kk30","type":"bench","gx":16,"gy":12,"rot":1,"owner":null},{"id":"kk31","type":"lamp","gx":10,"gy":4,"rot":0,"owner":null},{"id":"kk32","type":"lamp","gx":19,"gy":4,"rot":0,"owner":null},{"id":"kk33","type":"lamp","gx":10,"gy":11,"rot":0,"owner":null},{"id":"kk34","type":"lamp","gx":19,"gy":11,"rot":0,"owner":null},{"id":"kk35","type":"streetlight","gx":2,"gy":6,"rot":0,"owner":null},{"id":"kk36","type":"streetlight","gx":2,"gy":10,"rot":0,"owner":null},{"id":"kk37","type":"streetlight","gx":9,"gy":7,"rot":0,"owner":null},{"id":"kk38","type":"streetlight","gx":9,"gy":9,"rot":0,"owner":null},{"id":"kk39","type":"bin","gx":20,"gy":7,"rot":0,"owner":null},{"id":"kk40","type":"bin","gx":4,"gy":12,"rot":0,"owner":null},{"id":"kk41","type":"plant","gx":20,"gy":9,"rot":0,"owner":null},{"id":"kk42","type":"plant","gx":18,"gy":14,"rot":0,"owner":null},{"id":"kk43","type":"fountain","gx":21,"gy":8,"rot":0,"owner":null}]'::jsonb, 1),
+('cadde-2', '🏙️ Cadde 2 (Test)', 'user', 26, 18, 12, 6, '[{"id":"d1","type":"streetlight","gx":3,"gy":7,"rot":0,"owner":null},{"id":"d2","type":"streetlight","gx":9,"gy":7,"rot":0,"owner":null},{"id":"d3","type":"streetlight","gx":16,"gy":7,"rot":0,"owner":null},{"id":"d4","type":"streetlight","gx":22,"gy":7,"rot":0,"owner":null},{"id":"d5","type":"streetlight","gx":6,"gy":12,"rot":0,"owner":null},{"id":"d6","type":"streetlight","gx":13,"gy":12,"rot":0,"owner":null},{"id":"d7","type":"streetlight","gx":20,"gy":12,"rot":0,"owner":null},{"id":"d8","type":"bin","gx":6,"gy":7,"rot":0,"owner":null},{"id":"d9","type":"bin","gx":18,"gy":7,"rot":0,"owner":null},{"id":"d10","type":"bin","gx":9,"gy":12,"rot":0,"owner":null},{"id":"d11","type":"bench","gx":7,"gy":13,"rot":1,"owner":null},{"id":"d12","type":"bench","gx":16,"gy":13,"rot":1,"owner":null},{"id":"d13","type":"bus_stop","gx":23,"gy":6,"rot":0,"owner":null},{"id":"d14","type":"car_red","gx":8,"gy":11,"rot":0,"owner":null},{"id":"d15","type":"car_blue","gx":17,"gy":8,"rot":0,"owner":null},{"id":"d16","type":"tree","gx":2,"gy":16,"rot":0,"owner":null},{"id":"d17","type":"tree","gx":24,"gy":16,"rot":0,"owner":null},{"id":"d18","type":"tree","gx":6,"gy":15,"rot":0,"owner":null},{"id":"d19","type":"tree","gx":9,"gy":16,"rot":0,"owner":null},{"id":"d20","type":"tree","gx":1,"gy":13,"rot":0,"owner":null},{"id":"d21","type":"plant","gx":4,"gy":4,"rot":0,"owner":null},{"id":"d22","type":"plant","gx":9,"gy":4,"rot":0,"owner":null},{"id":"d23","type":"plant","gx":12,"gy":5,"rot":0,"owner":null},{"id":"d24","type":"flower_bed","gx":12,"gy":6,"rot":0,"owner":null},{"id":"d25","type":"flower_bed","gx":15,"gy":5,"rot":0,"owner":null},{"id":"d26","type":"bench","gx":20,"gy":16,"rot":1,"owner":null},{"id":"d27","type":"bench","gx":22,"gy":16,"rot":1,"owner":null},{"id":"d28","type":"plant","gx":23,"gy":15,"rot":0,"owner":null},{"id":"d29","type":"lamp","gx":19,"gy":14,"rot":0,"owner":null},{"id":"d30","type":"lamp","gx":24,"gy":14,"rot":0,"owner":null}]'::jsonb, 1)
 on conflict (slug) do update set
   name = excluded.name, min_role = excluded.min_role,
   furni = case when public.rooms.cols is distinct from excluded.cols or public.rooms.rows is distinct from excluded.rows
@@ -2691,6 +2711,7 @@ begin
   return jsonb_build_object(
     'username', t.username, 'role', t.role, 'xp', t.xp, 'level', public._level(t.xp), 'status_text', t.status_text,
     'fish_caught', t.fish_caught, 'joined', t.created_at,
+    'profession', public._eff_prof(t), 'prof_points', t.prof_points,
     'guild', (select g.name || ' [' || g.tag || ']' from public.guild_members m join public.guilds g on g.id = m.guild_id where m.user_id = t.id),
     'friends', (select count(*) from public.friendships f where f.status = 'accepted' and (f.requester = t.id or f.addressee = t.id)),
     'achievements', coalesce((select jsonb_agg(a.key order by a.created_at) from public.achievements a where a.user_id = t.id), '[]'::jsonb),
@@ -2797,7 +2818,7 @@ end $$;
 -- ---------- Herkese açık profil görünümü -------------------------------
 -- Diğer oyuncuların rütbesi/rengi buradan okunur (presence'a güvenilmez).
 create or replace view public.public_profiles as
-  select username, role, shirt_color, hair_color, skin_color, id, hat, glasses, hair_style, top_style, back_style from public.profiles;
+  select username, role, shirt_color, hair_color, skin_color, id, hat, glasses, hair_style, top_style, back_style, profession from public.profiles;
 
 -- ---------- RLS + yetkiler ---------------------------------------------
 
@@ -2943,6 +2964,8 @@ language sql immutable set search_path = '' as $$
     ('cadde-1', 'emlak-ofisi', 6, 21),
     ('cadde-1', 'oyunika', 20, 0),
     ('cadde-1', 'kis-koyu', 33, 17),
+    ('cadde-1', 'cadde-2', 33, 8),
+    ('cadde-2', 'cadde-1', 0, 9),
     ('emlak-ofisi', 'cadde-1', 8, 11),
     ('avm', 'cadde-1', 13, 19),
     ('avm', 'avm-kat2', 27, 10),
@@ -3264,6 +3287,319 @@ grant execute on function public.market_cancel(bigint)                          
 grant execute on function public.market_buy(bigint)                             to authenticated;
 grant execute on function public.get_tournament()                               to authenticated;
 grant execute on function public.admin_start_tournament(int)                    to authenticated;
+
+-- ---------- v42: Meslekler (Süvari, Rehber, Sanatçı, Müzisyen, Gazeteci, Yönetmen) ----------
+-- Meslekleri admin atar. Süvari mesleği mevcut Süvari rütbesine bağlıdır (rütbe = meslek).
+-- Sanil/XP/bahşiş/haber/tablo işlemlerinin hepsi sunucuda doğrulanır.
+create table if not exists public.prof_cooldowns (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  key     text not null,
+  at      timestamptz not null default now(),
+  primary key (user_id, key)
+);
+create table if not exists public.guide_tours (
+  target_id uuid primary key references public.profiles(id) on delete cascade,
+  guide_id  uuid not null references public.profiles(id) on delete cascade,
+  at        timestamptz not null default now()
+);
+create table if not exists public.news_posts (
+  id         bigserial primary key,
+  author_id  uuid not null references public.profiles(id) on delete cascade,
+  author     text not null,
+  title      text not null check (char_length(title) between 3 and 60),
+  body       text not null check (char_length(body) between 10 and 400),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.shoot_invites (
+  director_id uuid not null references public.profiles(id) on delete cascade,
+  target_id   uuid not null references public.profiles(id) on delete cascade,
+  accepted    boolean not null default false,
+  created_at  timestamptz not null default now(),
+  primary key (director_id, target_id)
+);
+alter table public.prof_cooldowns enable row level security;
+alter table public.guide_tours    enable row level security;
+alter table public.news_posts     enable row level security;
+alter table public.shoot_invites  enable row level security;
+revoke all on public.prof_cooldowns, public.guide_tours, public.news_posts, public.shoot_invites from anon, authenticated;
+
+-- Geçerli meslek: Süvari rütbesi = süvari mesleği
+create or replace function public._eff_prof(p public.profiles) returns text
+language sql immutable set search_path = '' as $$
+  select case when p.role = 'suvari' then 'suvari' else p.profession end
+$$;
+
+-- Mesleğe sahip mi? (admin hepsini kullanabilir)
+create or replace function public._has_prof(p public.profiles, p_prof text) returns boolean
+language sql immutable set search_path = '' as $$
+  select p.role = 'admin' or coalesce(public._eff_prof(p) = p_prof, false)
+$$;
+
+create or replace function public._prof_cd(p_uid uuid, p_key text, p_secs int) returns void
+language plpgsql security definer set search_path = '' as $$
+declare last_at timestamptz;
+begin
+  select at into last_at from public.prof_cooldowns where user_id = p_uid and key = p_key;
+  if last_at is not null and last_at > now() - make_interval(secs => p_secs) then
+    raise exception 'Biraz bekle (% sn kaldı).', ceil(extract(epoch from (last_at + make_interval(secs => p_secs) - now())))::int;
+  end if;
+  insert into public.prof_cooldowns (user_id, key, at) values (p_uid, p_key, now())
+  on conflict (user_id, key) do update set at = excluded.at;
+end $$;
+
+create or replace function public._prof_point(p_uid uuid, p_n int) returns void
+language sql security definer set search_path = '' as $$
+  update public.profiles set prof_points = least(prof_points + p_n, 1000000) where id = p_uid
+$$;
+
+-- Mesleği kuşanılabilir alet olarak eşle
+create or replace function public._tool_prof(p_tool text) returns text
+language sql immutable set search_path = '' as $$
+  select case p_tool when 'sancak' then 'suvari' when 'pusula' then 'rehber' when 'palet' then 'sanatci'
+                     when 'gitar' then 'muzisyen' when 'kamera' then 'gazeteci' when 'klaket' then 'yonetmen' end
+$$;
+
+-- Admin: meslek ata / kaldır (süvari için rütbe verilir)
+create or replace function public.admin_set_profession(p_username text, p_prof text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles; pr text;
+begin
+  me := public._require_admin();
+  pr := nullif(btrim(coalesce(p_prof, '')), '');
+  if pr is not null and pr not in ('rehber','sanatci','muzisyen','gazeteci','yonetmen') then
+    raise exception 'Geçersiz meslek (Süvari için rütbe ver).';
+  end if;
+  t := public._find_user(p_username);
+  update public.profiles set profession = pr,
+         tool = case when tool in ('pusula','palet','gitar','kamera','klaket') then null else tool end
+   where id = t.id;
+  perform public._emit_event('role', null, t.username, jsonb_build_object('role', t.role, 'profession', pr), me.username);
+  perform public._log(me.username, 'profession', t.username, coalesce(pr, '-'));
+end $$;
+
+-- Rehber: yeni oyuncuya (Seviye 1-3) tur tamamla, ikisi de ödül alır
+create or replace function public.guide_reward(p_username text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles; cnt int; new_coins int;
+begin
+  me := public._me();
+  if not public._has_prof(me, 'rehber') then raise exception 'Bu işlem Rehberlere özel.'; end if;
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendine tur veremezsin.'; end if;
+  if public._level(t.xp) > 3 then raise exception 'Rehber turu sadece Seviye 1-3 yeni oyuncular içindir.'; end if;
+  if me.current_room is null or t.current_room is distinct from me.current_room
+     or coalesce(t.last_seen, 'epoch') < now() - interval '70 seconds' then
+    raise exception 'Oyuncu aynı odada ve çevrimiçi olmalı.';
+  end if;
+  if exists (select 1 from public.guide_tours where target_id = t.id) then
+    raise exception 'Bu oyuncu zaten bir rehber turu tamamladı.';
+  end if;
+  select count(*) into cnt from public.guide_tours where guide_id = me.id and at > now() - interval '24 hours';
+  if cnt >= 8 then raise exception 'Günlük rehber turu sınırına ulaştın (8).'; end if;
+  insert into public.guide_tours (target_id, guide_id) values (t.id, me.id);
+  update public.profiles set coins = coins + 120 where id = me.id returning coins into new_coins;
+  update public.profiles set coins = coins + 80 where id = t.id;
+  perform public._add_xp(me.id, 60);
+  perform public._add_xp(t.id, 40);
+  perform public._prof_point(me.id, 2);
+  perform public._emit_user_event(t.id, 'guide_tour', jsonb_build_object('from', me.username, 'amount', 80));
+  return jsonb_build_object('coins', new_coins, 'earned', 120);
+end $$;
+
+-- Teşekkür / alkış / beğeni: meslek puanı verir (aynı kişiye 60 sn arayla)
+create or replace function public.prof_cheer(p_username text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles;
+begin
+  me := public._me();
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendine puan veremezsin.'; end if;
+  if public._eff_prof(t) is null then raise exception 'Bu oyuncunun mesleği yok.'; end if;
+  perform public._prof_cd(me.id, 'cheer:' || t.id::text, 60);
+  perform public._prof_point(t.id, 1);
+  perform public._emit_user_event(t.id, 'prof_cheer', jsonb_build_object('from', me.username, 'prof', public._eff_prof(t)));
+end $$;
+
+-- Müzisyene bahşiş
+create or replace function public.tip_player(p_username text, p_amount int) returns int
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles; new_coins int;
+begin
+  me := public._me();
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendine bahşiş veremezsin.'; end if;
+  if p_amount is null or p_amount < 5 or p_amount > 500 then raise exception 'Bahşiş 5 ile 500 Sanil arasında olmalı.'; end if;
+  if public._eff_prof(t) is distinct from 'muzisyen' and t.role <> 'admin' then raise exception 'Bahşiş sadece Müzisyenlere verilir.'; end if;
+  if me.current_room is null or t.current_room is distinct from me.current_room
+     or coalesce(t.last_seen, 'epoch') < now() - interval '70 seconds' then
+    raise exception 'Müzisyen aynı odada olmalı.';
+  end if;
+  update public.profiles set coins = coins - p_amount where id = me.id and coins >= p_amount returning coins into new_coins;
+  if new_coins is null then raise exception 'Yeterli Sanilin yok.'; end if;
+  update public.profiles set coins = coins + p_amount where id = t.id;
+  perform public._prof_point(t.id, 1);
+  perform public._emit_user_event(t.id, 'tip', jsonb_build_object('from', me.username, 'amount', p_amount));
+  return new_coins;
+end $$;
+
+-- Sanatçı: tablo üret (envantere girer; eve asılır veya Pazarda satılır)
+create or replace function public.paint_artwork(p_style text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; new_inv text[];
+begin
+  me := public._me();
+  if not public._has_prof(me, 'sanatci') then raise exception 'Tablo çizmek Sanatçılara özel.'; end if;
+  if p_style not in ('art_landscape','art_portrait','art_abstract','art_sea') then raise exception 'Bilinmeyen tablo.'; end if;
+  if coalesce(array_length(me.inventory, 1), 0) >= 60 then raise exception 'Çantan dolu.'; end if;
+  perform public._prof_cd(me.id, 'paint', 240);
+  update public.profiles set inventory = array_append(inventory, p_style) where id = me.id returning inventory into new_inv;
+  perform public._add_xp(me.id, 20);
+  perform public._prof_point(me.id, 1);
+  return jsonb_build_object('inventory', to_jsonb(new_inv), 'item', p_style);
+end $$;
+
+-- Gazeteci: haber yayınla
+create or replace function public.submit_news(p_title text, p_body text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; ti text; bo text;
+begin
+  me := public._me();
+  if not public._has_prof(me, 'gazeteci') then raise exception 'Haber yazmak Gazetecilere özel.'; end if;
+  if me.muted_until is not null and me.muted_until > now() then raise exception 'Susturuldun.'; end if;
+  ti := left(btrim(public._clean_chat(regexp_replace(coalesce(p_title, ''), '[[:cntrl:]]', '', 'g'), me.role)), 60);
+  bo := left(btrim(public._clean_chat(regexp_replace(coalesce(p_body, ''), '[[:cntrl:]]', ' ', 'g'), me.role)), 400);
+  if char_length(ti) < 3 then raise exception 'Başlık en az 3 karakter olmalı.'; end if;
+  if char_length(bo) < 10 then raise exception 'Haber metni en az 10 karakter olmalı.'; end if;
+  perform public._prof_cd(me.id, 'news', 600);
+  insert into public.news_posts (author_id, author, title, body) values (me.id, me.username, ti, bo);
+  delete from public.news_posts where id not in (select id from public.news_posts order by id desc limit 100);
+  update public.profiles set coins = coins + 40 where id = me.id;
+  perform public._add_xp(me.id, 15);
+  perform public._prof_point(me.id, 1);
+end $$;
+
+create or replace function public.news_list() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform public._me();
+  return coalesce((select jsonb_agg(jsonb_build_object('id', n.id, 'author', n.author, 'title', n.title, 'body', n.body, 'created_at', n.created_at) order by n.id desc)
+                     from (select * from public.news_posts order by id desc limit 6) n), '[]'::jsonb);
+end $$;
+
+create or replace function public.admin_delete_news(p_id bigint) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles;
+begin
+  me := public._require_admin();
+  delete from public.news_posts where id = p_id;
+  perform public._log(me.username, 'news_del', '-', p_id::text);
+end $$;
+
+-- Yönetmen: figüran daveti -> kabul -> çekimi bitir (toplu ödül)
+create or replace function public.shoot_invite(p_username text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; t public.profiles; cnt int;
+begin
+  me := public._me();
+  if not public._has_prof(me, 'yonetmen') then raise exception 'Figüran daveti Yönetmenlere özel.'; end if;
+  t := public._find_user(p_username);
+  if t.id = me.id then raise exception 'Kendini davet edemezsin.'; end if;
+  if me.current_room is null or t.current_room is distinct from me.current_room
+     or coalesce(t.last_seen, 'epoch') < now() - interval '70 seconds' then
+    raise exception 'Oyuncu aynı odada ve çevrimiçi olmalı.';
+  end if;
+  select count(*) into cnt from public.shoot_invites where director_id = me.id and created_at > now() - interval '15 minutes'
+     and target_id <> t.id;
+  if cnt >= 6 then raise exception 'En fazla 6 figüran davet edebilirsin.'; end if;
+  insert into public.shoot_invites (director_id, target_id, accepted, created_at) values (me.id, t.id, false, now())
+  on conflict (director_id, target_id) do update set accepted = false, created_at = now();
+  perform public._emit_user_event(t.id, 'shoot_invite', jsonb_build_object('from', me.username));
+end $$;
+
+create or replace function public.shoot_respond(p_director text, p_accept boolean) returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; d public.profiles; n int;
+begin
+  me := public._me();
+  d := public._find_user(p_director);
+  if p_accept then
+    update public.shoot_invites set accepted = true
+     where director_id = d.id and target_id = me.id and created_at > now() - interval '10 minutes';
+    get diagnostics n = row_count;
+    if n = 0 then raise exception 'Davet bulunamadı veya süresi doldu.'; end if;
+    perform public._emit_user_event(d.id, 'shoot_joined', jsonb_build_object('from', me.username));
+  else
+    delete from public.shoot_invites where director_id = d.id and target_id = me.id;
+  end if;
+end $$;
+
+create or replace function public.shoot_finish() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles; r record; n int := 0; reward int; new_coins int;
+begin
+  me := public._me();
+  if not public._has_prof(me, 'yonetmen') then raise exception 'Sahne çekimi Yönetmenlere özel.'; end if;
+  select count(*) into n from public.shoot_invites
+   where director_id = me.id and accepted and created_at > now() - interval '15 minutes';
+  if n < 2 then raise exception 'Çekim için en az 2 figüran davetini kabul etmeli.'; end if;
+  perform public._prof_cd(me.id, 'shoot', 600);
+  reward := 50 + 25 * least(n, 6);
+  update public.profiles set coins = coins + reward where id = me.id returning coins into new_coins;
+  perform public._add_xp(me.id, 40 + 10 * least(n, 6));
+  perform public._prof_point(me.id, 2);
+  for r in select target_id from public.shoot_invites where director_id = me.id and accepted and created_at > now() - interval '15 minutes' loop
+    begin
+      perform public._prof_cd(r.target_id, 'cast', 600);
+      update public.profiles set coins = coins + 40 where id = r.target_id;
+      perform public._add_xp(r.target_id, 30);
+      perform public._emit_user_event(r.target_id, 'shoot_done', jsonb_build_object('from', me.username, 'amount', 40));
+    exception when others then null;
+    end;
+  end loop;
+  delete from public.shoot_invites where director_id = me.id;
+  return jsonb_build_object('coins', new_coins, 'earned', reward, 'cast', n);
+end $$;
+
+revoke all on function public._eff_prof(public.profiles), public._has_prof(public.profiles, text),
+  public._prof_cd(uuid, text, int), public._prof_point(uuid, int), public._tool_prof(text),
+  public.admin_set_profession(text, text), public.guide_reward(text), public.prof_cheer(text),
+  public.tip_player(text, int), public.paint_artwork(text), public.submit_news(text, text),
+  public.news_list(), public.admin_delete_news(bigint), public.shoot_invite(text),
+  public.shoot_respond(text, boolean), public.shoot_finish() from public, anon, authenticated;
+grant execute on function public.admin_set_profession(text, text), public.guide_reward(text), public.prof_cheer(text),
+  public.tip_player(text, int), public.paint_artwork(text), public.submit_news(text, text),
+  public.news_list(), public.admin_delete_news(bigint), public.shoot_invite(text),
+  public.shoot_respond(text, boolean), public.shoot_finish() to authenticated;
+
+-- ---------- v44: Bildirim merkezi ----------
+create or replace function public.my_notifications() returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles;
+begin
+  me := public._me();
+  return jsonb_build_object(
+    'seen', me.notif_seen_id,
+    'items', coalesce((
+      select jsonb_agg(jsonb_build_object('id', e.id, 'kind', e.kind, 'payload', e.payload, 'created_at', e.created_at) order by e.id desc)
+        from (select * from public.user_events
+               where target_id = me.id
+                 and kind in ('friend_request','friend_accepted','gift_coins','gift_item','level_up','achievement','badge',
+                              'tournament_prize','market_offer','market_sold','hide_survived','muted','guide_tour','prof_cheer',
+                              'tip','shoot_invite','shoot_done')
+               order by id desc limit 40) e
+    ), '[]'::jsonb));
+end $$;
+
+create or replace function public.notif_mark_read() returns void
+language plpgsql security definer set search_path = '' as $$
+declare me public.profiles;
+begin
+  me := public._me();
+  update public.profiles set notif_seen_id = coalesce((select max(id) from public.user_events where target_id = me.id), 0) where id = me.id;
+end $$;
+
+revoke all on function public.my_notifications(), public.notif_mark_read() from public, anon, authenticated;
+grant execute on function public.my_notifications(), public.notif_mark_read() to authenticated;
 
 -- ---------- Realtime ---------------------------------------------------
 do $$

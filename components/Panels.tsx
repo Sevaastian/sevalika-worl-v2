@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BAG_ITEM_LABELS, EMOTES, FISH_PRICES, FURNI_CATALOG, GOODS_PRICES, HAIR_COLORS, RECIPES, ROD_PRICE, SHIRT_COLORS, SKIN_COLORS, isFishItem, isFurniType } from "@/lib/constants";
-import type { ColorLook, FurniType, Profile, UserRole, WeatherMode } from "@/lib/types";
+import { BAG_ITEM_LABELS, EMOTES, FISH_PRICES, FURNI_CATALOG, GOODS_PRICES, HAIR_COLORS, PROFESSIONS, PROFESSION_LIST, RECIPES, ROD_PRICE, SHIRT_COLORS, SKIN_COLORS, isFishItem, isFurniType } from "@/lib/constants";
+import type { ColorLook, FurniType, Profession, Profile, UserRole, WeatherMode } from "@/lib/types";
 import RoleBadge from "./RoleBadge";
 import { GoodsSeller } from "./WorldPanels";
 
@@ -265,7 +265,7 @@ export function BuildPanel(props: {
             </button>
           </div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
-            {FURNI_CATALOG.map((item) => (
+            {FURNI_CATALOG.filter((f) => !f.artwork).map((item) => (
               <button
                 key={item.type}
                 onClick={() => props.onSelect(item.type)}
@@ -323,8 +323,17 @@ export function PlayerCard(props: {
   onKick: () => void;
   onMute: (minutes: number) => void;
   onBan: (hours: number) => void;
+  /** Meslek (v42): hedefin mesleği + benim mesleğim */
+  profession?: Profession | null;
+  myProfession?: Profession | null;
+  onCheer?: () => void;
+  onTip?: (amount: number) => void;
+  onGuideTour?: () => void;
+  onShootInvite?: () => void;
+  onProfession?: (p: Profession | null) => void;
 }) {
   const [sub, setSub] = useState<"gift" | "report" | null>(null);
+  const [tip, setTip] = useState(25);
   const [amount, setAmount] = useState(50);
   const btn = "text-[11px] font-bold py-1.5 rounded-lg border transition";
   const giftable = props.inventory.filter((i) => isFurniType(i));
@@ -340,6 +349,36 @@ export function PlayerCard(props: {
           ✕
         </button>
       </div>
+      {props.profession && (
+        <div className="text-[11px] font-bold rounded-lg px-2 py-1 border" style={{ color: PROFESSIONS[props.profession].color, borderColor: `${PROFESSIONS[props.profession].color}66`, background: `${PROFESSIONS[props.profession].color}1a` }}>
+          {PROFESSIONS[props.profession].icon} {PROFESSIONS[props.profession].name}
+        </div>
+      )}
+      {props.profession && props.onCheer && (
+        <div className="space-y-1.5">
+          <button onClick={props.onCheer} className={`${btn} w-full bg-amber-400/15 text-amber-200 border-amber-400/40`}>
+            {props.profession === "muzisyen" ? "👏 Alkışla" : props.profession === "rehber" ? "🙏 Teşekkür et" : props.profession === "sanatci" ? "❤️ Beğen" : "👍 Takdir et"}
+          </button>
+          {props.profession === "muzisyen" && props.onTip && (
+            <div className="flex gap-1.5">
+              <input type="number" min={5} max={500} value={tip} onChange={(e) => setTip(Number(e.target.value))} className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-yellow-400 font-bold" />
+              <button onClick={() => props.onTip?.(tip)} className={`${btn} flex-1 bg-yellow-400 text-slate-950 border-yellow-300`}>
+                💰 Bahşiş ver
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {props.myProfession === "rehber" && props.onGuideTour && (
+        <button onClick={props.onGuideTour} className={`${btn} w-full bg-yellow-400/15 text-yellow-200 border-yellow-400/40`}>
+          🧭 Rehber turunu tamamla
+        </button>
+      )}
+      {props.myProfession === "yonetmen" && props.onShootInvite && (
+        <button onClick={props.onShootInvite} className={`${btn} w-full bg-rose-500/15 text-rose-200 border-rose-400/40`}>
+          🎬 Figüran davet et
+        </button>
+      )}
 
       <div className="grid grid-cols-2 gap-1.5">
         {props.canWhisper && (
@@ -439,6 +478,17 @@ export function PlayerCard(props: {
             <button onClick={() => props.onRole("user")} className={`${btn} bg-slate-800 text-slate-300 border-slate-700`}>
               👤 Üye yap
             </button>
+            {props.onProfession &&
+              PROFESSION_LIST.filter((d) => d.key !== "suvari").map((d) => (
+                <button key={d.key} onClick={() => props.onProfession?.(d.key)} className={`${btn} bg-slate-800 border-slate-700`} style={{ color: d.color }}>
+                  {d.icon} {d.name}
+                </button>
+              ))}
+            {props.onProfession && (
+              <button onClick={() => props.onProfession?.(null)} className={`${btn} bg-slate-800 text-slate-400 border-slate-700`}>
+                ✖ Mesleği kaldır
+              </button>
+            )}
             <button onClick={props.onKick} className={`${btn} bg-rose-500/15 text-rose-300 border-rose-500/40`}>
               🚪 At
             </button>

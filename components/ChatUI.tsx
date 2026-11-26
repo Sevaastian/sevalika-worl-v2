@@ -21,7 +21,7 @@ export function ChatLog({ lines, open, onToggle }: { lines: ChatLine[]; open: bo
         {open ? "▾ Sohbeti Gizle" : `▴ Sohbet Geçmişi (${lines.length})`}
       </button>
       {open && (
-        <div className="w-full h-32 md:h-44 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-2.5 overflow-y-auto shadow-2xl space-y-1.5 select-text">
+        <div className="w-full h-24 md:h-44 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-2.5 overflow-y-auto shadow-2xl space-y-1.5 select-text">
           {lines.map((m, i) => (
             <div key={i} className={`text-xs leading-relaxed break-words ${m.isWhisper ? "bg-purple-500/15 border border-purple-400/30 rounded-lg px-2 py-1" : ""}`}>
               <span className="text-slate-500 text-[10px] mr-1.5">[{m.time}]</span>
@@ -55,7 +55,7 @@ export function ChatBar(props: {
 }) {
   const remaining = MAX_CHAT_LENGTH - props.value.length;
   return (
-    <div className="bg-slate-900 border-t border-slate-800 z-20">
+    <div className="bg-slate-900 border-t border-slate-800 z-20 pb-[env(safe-area-inset-bottom)]">
       {props.warning && (
         <div className="bg-rose-500/20 border-b border-rose-500/40 text-rose-300 text-[11px] font-semibold px-4 py-1 text-center">⚠️ {props.warning}</div>
       )}

@@ -29,6 +29,13 @@ import {
   OUTFIT_BUNDLES,
   canRideHorse,
   canWhisper,
+  PROFESSIONS,
+  PROF_BY_TOOL,
+  PROF_FX_DURATION,
+  FX_PROF,
+  PROF_FX_KINDS,
+  canUseProfTool,
+  effProfession,
   isFurniType,
   applyHomeStyle,
   homeSlug,
@@ -61,6 +68,9 @@ import type {
   NpcKind,
   OyunikaState,
   Player,
+  NotifItem,
+  Profession,
+  ProfFxKind,
   Profile,
   BadgeState,
   PopularHome,
@@ -82,6 +92,7 @@ import type { HainMsg } from "@/lib/hain";
 import type { TetMsg } from "@/lib/tetris";
 import TetrisArena from "./TetrisArena";
 import NewspaperModal from "./NewspaperModal";
+import ProfessionDock from "./ProfessionDock";
 import { AvatarPanel, BagPanel, BuildPanel, ChefNpcModal, FisherNpcModal, PlayerCard } from "./Panels";
 import RoleBadge from "./RoleBadge";
 import { BundleShopPanel, ExpandHomePanel, FriendsPanel, GuidePanel, QuizBanner, RealtorPanel, ShopPanel, WheelPanel } from "./SocialPanels";
@@ -93,6 +104,8 @@ import { usePanelDock } from "./usePanelDock";
 import RoomLoader from "./RoomLoader";
 import { SettingsPanel } from "./SettingsPanel";
 import { DailyPanel } from "./DailyPanel";
+import { NotificationPanel } from "./NotificationPanel";
+import { NOTIF_KINDS } from "@/lib/notif";
 import { Tour, tourDone } from "./Tour";
 import { loadSettings, saveSettings, type Settings } from "@/lib/settings";
 
@@ -172,14 +185,24 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   const [musicOn, setMusicOn] = useState(false);
 
   const [panel, setPanel] = useState<PanelKey | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [notifs, setNotifs] = useState<NotifItem[]>([]);
+  const [notifSeen, setNotifSeen] = useState(0);
+  const [shootCast, setShootCast] = useState(0);
+  const [shootInvite, setShootInvite] = useState<string | null>(null);
+  const [newsWrite, setNewsWrite] = useState(false);
+  const danceByMusic = useRef(false);
+  const playFxRef = useRef<((k: ProfFxKind, id: string, gx: number, gy: number, name: string) => void) | null>(null);
+  const musicTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showAvatar, setShowAvatar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
-  const [showChat, setShowChat] = useState(true);
+  // Telefonda sohbet kapalı başlar (ekranı kaplamasın); sadece mesaj sayısı görünür
+  const [showChat, setShowChat] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 768));
   const [buildMode, setBuildMode] = useState(false);
   const [nudgeSel, setNudgeSel] = useState<string | null>(null);
   const [buildTool, setBuildTool] = useState<"place" | "remove" | "nudge" | "rotate">("place");
   const [selectedFurni, setSelectedFurni] = useState<FurniType>("sofa");
   const [rotation, setRotation] = useState(0);
-  const [selected, setSelected] = useState<{ name: string; role: UserRole } | null>(null);
+  const [selected, setSelected] = useState<{ name: string; role: UserRole; profession?: Profession | null } | null>(null);
   const [activeNpc, setActiveNpc] = useState<NpcKind | null>(null);
   const [popularHomes, setPopularHomes] = useState<PopularHome[]>([]);
   const [badgeState, setBadgeState] = useState<BadgeState | null>(null);
@@ -322,6 +345,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         me.status = next.status ?? null;
         me.hairStyle = next.hairStyle;
         me.tool = next.tool;
+        me.profession = next.profession ?? null;
         me.pet = next.pet;
         if (me.isRidingHorse && !canRideHorse(next.role)) {
           me.isRidingHorse = false;
@@ -385,6 +409,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
             const c = cache.get(p.name);
             if (c && p.id !== myId && !p.isNpc) {
               p.role = c.role;
+              p.profession = c.profession ?? null;
               p.uid = c.id;
             }
           }
@@ -800,7 +825,13 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       }
     };
     engineRef.current = engine;
-    if (window.location.search.includes("debug")) (window as unknown as { __sw?: unknown }).__sw = engine;
+    if (window.location.search.includes("debug")) {
+      (window as unknown as { __sw?: unknown }).__sw = engine;
+      (window as unknown as { __swProf?: (p: string | null) => Promise<void> }).__swProf = async (pr) => {
+        await backend.adminSetProfession(profileRef.current.username, pr as Profession | null);
+        await refreshProfile();
+      };
+    }
     engine.start();
     return () => {
       engine.stop();
@@ -866,6 +897,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         tool: p.tool,
         pet: p.pet,
         role: p.role,
+        profession: p.profession ?? null,
         layered: getLayeredPref(),
         isRidingHorse: wasRiding && canRideHorse(p.role),
       }),
@@ -967,6 +999,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       }
     }, 2000);
     const handlers: NetHandlers = {
+      onFx: () => {},
       onStatus: setConn,
 
       onPresence: (list) => {
@@ -1001,13 +1034,14 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           pl.back = cosmetic(s.back, "back");
           pl.status = typeof s.status === "string" && s.status ? s.status.replace(/[\u0000-\u001f]/g, "").slice(0, 40) : null;
           pl.hairStyle = cosmetic(s.hairStyle, "hair") ?? "hs_short";
-          pl.tool = s.tool === "fishing_rod" || s.tool === "newspaper" ? s.tool : null;
+          pl.tool = s.tool === "fishing_rod" || s.tool === "newspaper" || (typeof s.tool === "string" && PROF_BY_TOOL[s.tool]) ? s.tool : null;
           pl.pet = cosmetic(s.pet, "pet");
           pl.isFishing = Boolean(s.isFishing);
           pl.layered = Boolean(s.lay);
           pl.isRidingHorse = Boolean(s.isRidingHorse);
           const cached = profileCache.current.get(name);
           pl.role = cached?.role ?? "user";
+          pl.profession = cached?.profession ?? null;
           pl.uid = cached?.id;
           names.push(name);
         }
@@ -1080,6 +1114,14 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       },
     };
 
+    handlers.onFx = ({ id, kind, gx, gy }) => {
+      if (id === myId) return;
+      const pl = engine.players.find((x) => x.id === id);
+      if (!pl || pl.isNpc || !PROF_FX_KINDS.includes(kind as ProfFxKind)) return;
+      const k = kind as ProfFxKind;
+      if (pl.role !== "admin" && effProfession(pl.role, pl.profession) !== FX_PROF[k]) return;
+      playFxRef.current?.(k, pl.id, typeof gx === "number" ? gx : pl.gx, typeof gy === "number" ? gy : pl.gy, pl.name);
+    };
     const net = new RoomNetwork(supabase, roomSlug, myId, handlers);
     netRef.current = net;
     net.join(buildPresence());
@@ -1151,12 +1193,43 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
   useEffect(() => {
     return backend.subscribeUserEvents(initialProfile.id, (ev: UserEvent) => {
       const from = String(ev.payload.from ?? "");
+      if (NOTIF_KINDS.has(ev.kind)) setNotifs((cur) => (cur.some((n) => n.id === ev.id) ? cur : [{ id: ev.id, kind: ev.kind, payload: ev.payload, created_at: new Date().toISOString() }, ...cur].slice(0, 40)));
       switch (ev.kind) {
         case "friend_request":
           sfx.play("notify");
           notify(`👥 ${from} sana arkadaşlık isteği gönderdi.`, 4000);
           sys(`${from} sana arkadaşlık isteği gönderdi (Arkadaşlar paneli).`);
           void refreshFriends();
+          break;
+        case "guide_tour":
+          sfx.play("notify");
+          sys(`🧭 Rehber ${from} turunu tamamladı! +${Number(ev.payload.amount ?? 0)} Sanil ve XP kazandın.`);
+          notify(`🧭 ${from} ile rehber turunu tamamladın!`, 4000);
+          void refreshProfile();
+          break;
+        case "prof_cheer":
+          sys(`👏 ${from} sana meslek puanı verdi!`);
+          void refreshProfile();
+          break;
+        case "tip":
+          sfx.play("notify");
+          sys(`💰 ${from} sana ${Number(ev.payload.amount ?? 0)} Sanil bahşiş bıraktı!`);
+          notify(`💰 ${from} bahşiş bıraktı: +${Number(ev.payload.amount ?? 0)} Sanil`, 4000);
+          void refreshProfile();
+          break;
+        case "shoot_invite":
+          sfx.play("notify");
+          setShootInvite(from);
+          sys(`🎬 Yönetmen ${from} seni figüran olarak çekime davet etti.`);
+          break;
+        case "shoot_joined":
+          setShootCast((n) => n + 1);
+          sys(`🎬 ${from} figüran davetini kabul etti.`);
+          break;
+        case "shoot_done":
+          sys(`🎬 Çekim tamamlandı! +${Number(ev.payload.amount ?? 0)} Sanil ve XP kazandın.`);
+          notify(`🎬 Çekim bitti: +${Number(ev.payload.amount ?? 0)} Sanil`, 4000);
+          void refreshProfile();
           break;
         case "friend_accepted":
           sys(`${from} arkadaşlık isteğini kabul etti.`);
@@ -1262,11 +1335,19 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           if (ev.target) {
             profileCache.current.delete(ev.target);
             const pl = engine?.players.find((p) => p.name.toLowerCase() === ev.target?.toLowerCase());
-            if (pl) pl.role = role;
+            if (pl) {
+              pl.role = role;
+              if (ev.payload.profession !== undefined) pl.profession = (ev.payload.profession as Profession | null) ?? null;
+            }
           }
           if (toMe) {
             void refreshProfile();
-            showAnnouncement(ev.by_username, `${profileRef.current.username} rütben ${ROLE_LABEL[role] ?? role} olarak güncellendi!`, 6500);
+            const prof = ev.payload.profession as Profession | null | undefined;
+            showAnnouncement(
+              ev.by_username,
+              prof !== undefined ? (prof ? `${profileRef.current.username} artık ${PROFESSIONS[prof].icon} ${PROFESSIONS[prof].name}!` : `${profileRef.current.username} mesleğin kaldırıldı.`) : `${profileRef.current.username} rütben ${ROLE_LABEL[role] ?? role} olarak güncellendi!`,
+              6500,
+            );
           }
           break;
         }
@@ -1530,7 +1611,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
         return;
       }
       setActiveNpc(null);
-      setSelected({ name: hit.name, role: hit.role });
+      setSelected({ name: hit.name, role: hit.role, profession: hit.profession ?? null });
       return;
     }
     setSelected(null);
@@ -1755,6 +1836,162 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
     }
     return null;
   };
+
+  /* ---------------- Meslekler (v42) ---------------- */
+  const stopMusicPerform = useCallback(() => {
+    if (musicTimer.current) clearTimeout(musicTimer.current);
+    musicTimer.current = null;
+    setPlaying(false);
+    const engine = engineRef.current;
+    if (engine) engine.profFx = engine.profFx.filter((f) => !(f.kind === "music" && f.playerId === myId));
+    const me = engine?.me();
+    if (me && danceByMusic.current && me.isDancing) {
+      me.isDancing = false;
+      netRef.current?.send("action", { id: myId, isDancing: false });
+    }
+    danceByMusic.current = false;
+  }, [myId]);
+
+  /** Efekti motora ekler; müzikse yakındaki bu istemcinin oyuncusunu dans ettirir. */
+  const playProfFx = useCallback(
+    (kind: ProfFxKind, id: string, gx: number, gy: number, name: string) => {
+      const engine = engineRef.current;
+      if (!engine || engine.profFx.length > 30) return;
+      const tn = performance.now();
+      if (engine.profFx.some((f) => f.playerId === id && f.kind === kind && (kind !== "flash" || tn - f.createdAt < 250))) {
+        if (kind !== "music") return;
+        engine.profFx = engine.profFx.filter((f) => !(f.playerId === id && f.kind === "music"));
+      }
+      engine.profFx.push({ id: Math.random().toString(36).slice(2), kind, playerId: id, gx, gy, createdAt: tn, dur: PROF_FX_DURATION[kind], name });
+      if (kind === "music" && id !== myId) {
+        const me = engine.me();
+        const src = engine.players.find((x) => x.id === id);
+        if (me && src && Math.hypot(me.gx - src.gx, me.gy - src.gy) <= 6 && !me.isSitting && !me.isRidingHorse && !me.isFishing && !me.isDancing) {
+          me.isDancing = true;
+          me.path = [];
+          danceByMusic.current = true;
+          netRef.current?.send("action", { id: myId, isDancing: true });
+          if (musicTimer.current) clearTimeout(musicTimer.current);
+          musicTimer.current = setTimeout(() => {
+            const m = engineRef.current?.me();
+            if (m && danceByMusic.current && m.isDancing) {
+              m.isDancing = false;
+              netRef.current?.send("action", { id: myId, isDancing: false });
+            }
+            danceByMusic.current = false;
+          }, PROF_FX_DURATION.music);
+        }
+      }
+    },
+    [myId],
+  );
+  useEffect(() => {
+    playFxRef.current = playProfFx;
+  }, [playProfFx]);
+
+  const profAction = (kind: ProfFxKind) => {
+    const engine = engineRef.current;
+    const me = engine?.me();
+    if (!engine || !me) return;
+    if (kind === "music") {
+      if (playing) {
+        stopMusicPerform();
+        return;
+      }
+      setPlaying(true);
+      if (musicTimer.current) clearTimeout(musicTimer.current);
+      musicTimer.current = setTimeout(() => setPlaying(false), PROF_FX_DURATION.music);
+      me.isDancing = false;
+    }
+    const gx = Math.round(me.gx);
+    const gy = Math.round(me.gy);
+    playProfFx(kind, myId, gx, gy, profileRef.current.username);
+    netRef.current?.send("fx", { id: myId, kind, gx, gy });
+    sfx.play("pop");
+  };
+
+  const toggleProfTool = async () => {
+    const prof = effProfession(profileRef.current.role, profileRef.current.profession);
+    if (!prof) return;
+    const toolId = PROFESSIONS[prof].tool;
+    const next = profileRef.current.tool === toolId ? null : toolId;
+    if (profileRef.current.tool === "fishing_rod") stopFishing();
+    await act(async () => {
+      const tool = await backend.equipTool(next);
+      updateProfile({ tool });
+      if (!tool) stopMusicPerform();
+      trackPresence();
+      notify(tool ? `${PROFESSIONS[prof].icon} ${PROFESSIONS[prof].toolName} elinde!` : `${PROFESSIONS[prof].toolName} cebine girdi.`);
+    });
+  };
+
+  const paintArt = async (style: string) => {
+    await act(async () => {
+      const inv = await backend.paintArtwork(style);
+      updateProfile({ inventory: inv });
+      profAction("paint");
+      notify("🎨 Tablo tamamlandı! Çantandan eve asabilir veya Pazarda satabilirsin.", 4500);
+    });
+  };
+
+  const finishShoot = async () => {
+    await act(async () => {
+      const r = await backend.shootFinish();
+      updateProfile({ coins: r.coins });
+      setShootCast(0);
+      notify(`🎬 Çekim tamam! ${r.cast} figüran, +${r.earned} Sanil`, 5000);
+    });
+  };
+
+  const cheerPlayer = (name: string) =>
+    act(async () => {
+      await backend.profCheer(name);
+      notify("👏 Puan verildi!");
+    });
+  const tipPlayerTo = (name: string, amount: number) =>
+    act(async () => {
+      const coins = await backend.tipPlayer(name, amount);
+      updateProfile({ coins });
+      notify(`💰 ${name} oyuncusuna ${amount} Sanil bahşiş verdin.`);
+    });
+  const guideTour = (name: string) =>
+    act(async () => {
+      const r = await backend.guideReward(name);
+      updateProfile({ coins: r.coins });
+      notify(`🧭 Rehber turu tamamlandı! +${r.earned} Sanil`, 4500);
+    });
+  const invitePlayer = (name: string) =>
+    act(async () => {
+      await backend.shootInvite(name);
+      notify(`🎬 ${name} figüran olarak davet edildi.`);
+    });
+  const adminSetProf = (name: string, prof: Profession | null) =>
+    act(async () => {
+      await backend.adminSetProfession(name, prof);
+      notify(prof ? `${PROFESSIONS[prof].icon} ${name} artık ${PROFESSIONS[prof].name}.` : `${name} mesleği kaldırıldı.`);
+    });
+
+  const markNotifsRead = useCallback(async () => {
+    setNotifSeen(Number.MAX_SAFE_INTEGER);
+    try {
+      await backend.markNotificationsRead();
+    } catch {}
+  }, []);
+  useEffect(() => {
+    void backend
+      .fetchNotifications()
+      .then((r) => {
+        setNotifs(r.items);
+        setNotifSeen(r.seen);
+      })
+      .catch(() => {});
+  }, []);
+  // panel kapanınca (veya başka panele geçilince) hepsi okundu sayılır; açıkken okunmamışlar vurgulu kalır
+  const prevPanel = useRef<PanelKey | null>(null);
+  useEffect(() => {
+    if (prevPanel.current === "notifs" && panel !== "notifs") void markNotifsRead();
+    prevPanel.current = panel;
+  }, [panel, markNotifsRead]);
 
   const togglePaper = async () => {
     const next = profileRef.current.tool === "newspaper" ? null : "newspaper";
@@ -2344,6 +2581,7 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
       </div>
       <TopBar
         profile={profile}
+        unread={notifs.filter((n) => n.id > notifSeen && NOTIF_KINDS.has(n.kind)).length}
         roomSlug={roomSlug}
         roomName={room.name}
         conn={conn}
@@ -2430,11 +2668,60 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
           )}
         </div>
 
+        {shootInvite && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 border border-rose-400/60 rounded-xl px-3 py-2 shadow-2xl flex items-center gap-2 text-xs text-white">
+            <span>🎬 Yönetmen <b>{shootInvite}</b> seni figüran olarak çağırdı!</span>
+            <button
+              onClick={() => {
+                const d = shootInvite;
+                setShootInvite(null);
+                void act(async () => {
+                  await backend.shootRespond(d, true);
+                  notify("🎬 Figüranlığı kabul ettin; çekim bitince ödül gelir.");
+                });
+              }}
+              className="bg-emerald-500 text-slate-950 font-bold rounded-lg px-2 py-1"
+            >
+              Kabul
+            </button>
+            <button
+              onClick={() => {
+                const d = shootInvite;
+                setShootInvite(null);
+                void act(() => backend.shootRespond(d, false));
+              }}
+              className="bg-slate-700 font-bold rounded-lg px-2 py-1"
+            >
+              Reddet
+            </button>
+          </div>
+        )}
         {tourOpen && <Tour onClose={() => setTourOpen(false)} />}
         <RoomLoader key={roomSlug} name={resolveRoom(roomSlug)?.name ?? "Oda"} />
         {quiz && <QuizBanner quiz={quiz} onAnswer={answerQuiz} onExpire={() => setQuiz(null)} />}
 
         <div ref={dockL} className="sw-dock absolute top-2.5 left-2.5 z-10 flex flex-col gap-2 items-start pointer-events-none">
+          {(() => {
+            const prof = effProfession(profile.role, profile.profession);
+            return prof ? (
+              <ProfessionDock
+                profession={prof}
+                tool={profile.tool}
+                points={profile.profPoints ?? 0}
+                playing={playing}
+                shootCast={shootCast}
+                onToggleTool={() => void toggleProfTool()}
+                onAction={profAction}
+                onPaint={(st) => void paintArt(st)}
+                onSnapshot={takePhoto}
+                onWriteNews={() => {
+                  setNewsWrite(true);
+                  setActiveNpc("alper");
+                }}
+                onFinishShoot={() => void finishShoot()}
+              />
+            ) : null;
+          })()}
           {!showAvatar ? (
             <button
               onClick={() => setShowAvatar(true)}
@@ -2493,6 +2780,13 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onBlock={() => blockPlayer(selected.name)}
               onGift={(n) => adminGift(selected.name, n)}
               onRole={(r) => adminGrantRole(selected.name, r)}
+              profession={effProfession(selected.role, selected.profession)}
+              myProfession={effProfession(profile.role, profile.profession)}
+              onCheer={() => void cheerPlayer(selected.name)}
+              onTip={(n) => void tipPlayerTo(selected.name, n)}
+              onGuideTour={() => void guideTour(selected.name)}
+              onShootInvite={() => void invitePlayer(selected.name)}
+              onProfession={profile.role === "admin" ? (pr) => void adminSetProf(selected.name, pr) : undefined}
               onKick={() => adminKick(selected.name)}
               onMute={(m) => adminMute(selected.name, m)}
               onBan={(h) => adminBan(selected.name, h)}
@@ -2529,7 +2823,19 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               fetchTetris={() => backend.tetrisBoard()}
               holding={profile.tool === "newspaper"}
               onToggleHold={() => void togglePaper()}
-              onClose={() => setActiveNpc(null)}
+              onClose={() => {
+                setActiveNpc(null);
+                setNewsWrite(false);
+              }}
+              fetchNews={() => backend.newsList()}
+              canWrite={canUseProfTool(profile.role, profile.profession, "kamera")}
+              isAdmin={profile.role === "admin"}
+              autoWrite={newsWrite}
+              onSubmitNews={async (t, b) => {
+                await backend.submitNews(t, b);
+                void refreshProfile();
+              }}
+              onDeleteNews={(id) => backend.adminDeleteNews(id)}
             />
           )}
           {activeNpc === "ali" && (
@@ -2651,6 +2957,14 @@ export default function Game({ initialProfile, onLogout }: { initialProfile: Pro
               onLeave={() => guildAct(() => backend.guildLeave(), "Loncadan ayrıldın.")}
               onKick={(u) => guildAct(() => backend.guildKick(u), `${u} loncadan çıkarıldı.`)}
               onDonate={(n) => guildAct(() => backend.guildDonate(n).then((r) => updateProfile({ coins: r.coins })), "🛡️ Bağış yapıldı!")}
+            />
+          )}
+          {panel === "notifs" && (
+            <NotificationPanel
+              items={notifs}
+              seen={notifSeen}
+              onReadAll={() => void markNotifsRead()}
+              onClose={() => setPanel(null)}
             />
           )}
           {panel === "daily" && (

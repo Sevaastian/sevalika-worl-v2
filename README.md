@@ -350,3 +350,28 @@ supabase/schema.sql    Tablolar, RLS, güvenli RPC fonksiyonları
 - v39: zeminler neon/metal/snow, PNG su (animasyonlu), Cadde mağaza cepheleri PNG duvar dokusu.
 - v40: PNG tabela levhaları (ampullü), duvar binaları eğik/dokulu.
 - v41: Sevaastian ve Vistekiis artık 3D katmanlı karakterle çiziliyor (4 yön, yürüme, oturma); siyah kıyafet, Sevaastian varsayılan takım elbise + koyu gözlük, Vistekiis uzun siyah saç. Kozmetikleri korunur; katman yüklenmezse eski vektör çizim yedek.
+
+
+## v42 — Meslek sistemi
+- 6 meslek: 🐎 Süvari (rütbeye bağlı), 🧭 Rehber, 🎨 Sanatçı, 🎶 Müzisyen, 📰 Gazeteci, 🎬 Yönetmen. Admin oyuncu kartından atar (`admin_set_profession`); Süvari rütbesi = Süvari mesleği.
+- İsim etiketinin solunda meslek rozeti; her mesleğe özel el eşyası (sancak, pusula, palet, gitar, kamera, klaket) ve aktif düğme (Meslek paneli, sol üst).
+- Efektler odadaki herkese yayınlanır (`fx` broadcast): flaş, toplanma işareti, klaket geri sayımı, müzik notaları (yakındakiler dans eder), sancak, tablo parıltısı.
+- Sunucu doğrulamalı işlemler: `guide_reward`, `prof_cheer`, `tip_player`, `paint_artwork` (tablo = `art_*` eşya, katalogdan alınamaz), `submit_news`/`news_list`/`admin_delete_news`, `shoot_invite`/`shoot_respond`/`shoot_finish`.
+- Şema değişti: `supabase/schema.sql` yeniden çalıştırılmalı.
+
+
+## v43-v44
+- v43: kasma için otomatik çizim çözünürlüğü (gfx.res, localStorage `sw_res`); `?fps` overlay'inde "çöz" değeri.
+- v44: Bildirim merkezi. Üst çubukta 🔔 + okunmamış sayısı; son 40 kişisel olay (arkadaş, hediye, rozet, başarım, seviye, turnuva, pazar, meslek...). Çevrimdışıyken gelenler de görünür (user_events 14 gün saklanır, kişi başı 150). Şema: `profiles.notif_seen_id`, `my_notifications()`, `notif_mark_read()` -> schema.sql yeniden çalıştırılmalı.
+
+## v45 — Mobil cila
+- Telefonda üst çubuk: 🎒 🔔 🎁 + ☰ Menü (tüm paneller büyük dokunmatik kutular, rozetli); admin mekan seçici menüde. Masaüstü çubuğu aynen.
+- Sohbet telefonda kapalı başlar, açılınca daha kısa (h-24).
+- `viewportFit: cover` + güvenli alan (çentik / ana ekran çubuğu) boşlukları.
+- Şema değişmedi.
+
+## v46 – Cadde 2 (test odası, resimli stil)
+- Yeni oda `cadde-2` (26×18): zemin + binalar tek PNG (`public/sprites/rooms/cadde-2.png`), `tools/gen_backdrop_cadde2.py` ile üretilir.
+- `lib/backdrop.ts`: odaya özel arka plan katmanı (ızgara yalnızca yürüme/hover için kalır). `ROOM_BLOCK` (constants.ts) binaların yürünemez karelerini tanımlar.
+- Cadde 1'den (33,8) kapısıyla girilir; dönüş kapısı Cadde 2 (0,9). Cadde 1 düzenine dokunulmadı.
+- Şema: rooms satırı + `_portal_ok` kapıları eklendi (schema.sql'i baştan çalıştır).

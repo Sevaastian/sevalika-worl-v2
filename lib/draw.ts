@@ -3,13 +3,14 @@ import { mipDraw } from "./mip";
 import { lighting, silhouette } from "./ambience";
 import { gfx } from "./settings";
 import { bodyLayers, drawLayer, hasLayeredTop, hasLayeredHat, hasLayeredGlasses, hasLayeredBack, layersReady } from "./avatarLayers";
-import { FURNI_BY_TYPE, ROOM_ROCKS, ROOM_WALLS, canRideHorse, isWaterTile, oyunikaCellAt, isPartiRoute, PARTI_PODIUM } from "./constants";
+import { FURNI_BY_TYPE, PROFESSIONS, PROF_BY_TOOL, ROOM_ROCKS, ROOM_WALLS, canRideHorse, effProfession, isWaterTile, oyunikaCellAt, isPartiRoute, PARTI_PODIUM } from "./constants";
 import { HAIN_ZONE_LABELS, hainZone } from "./hain";
 import { CHAR_K, getLayout, gridToScreen, type Layout } from "./iso";
 import { FURNI_SPRITES, sprites } from "./sprites";
 import { drawHorseSprite } from "./horse";
 import { f3Frame } from "./f3";
-import { offscreen } from "./view";
+import { offscreen, view } from "./view";
+import { drawBackdrop, hasBackdrop } from "./backdrop";
 import { drawSignPlate, drawFloorTex, drawWallTex, isFloorKind, wallKindFor } from "./tiles";
 import type { FurniItem, NpcKind, Player, Portal, RoomTheme } from "./types";
 
@@ -1298,11 +1299,15 @@ export function drawRoom(
   const right = gridToScreen(cols, 0, l);
   const wallH = (slug === "cadde-1" || slug === "sahil-kasabasi" ? 115 : 110) * l.scale;
 
-  drawSlab(ctx, l, slug, theme);
-  drawWallPanel(ctx, l, top, left, wallH, theme.wallLeft, rows, false, slug);
-  drawWallPanel(ctx, l, top, right, wallH, theme.wallRight, cols, true, slug);
+  // Resimli arka planlı odalar (Cadde 2): zemin + binalar tek PNG; ızgara yalnızca yürüme/hover için
+  const hasBd = hasBackdrop(slug) && drawBackdrop(ctx, l, slug, view.w, view.h);
+  if (!hasBd) {
+    drawSlab(ctx, l, slug, theme);
+    drawWallPanel(ctx, l, top, left, wallH, theme.wallLeft, rows, false, slug);
+    drawWallPanel(ctx, l, top, right, wallH, theme.wallRight, cols, true, slug);
 
-  drawRoomWallDecor(ctx, l, slug, time);
+    drawRoomWallDecor(ctx, l, slug, time);
+  }
 
   for (let gx = 0; gx < cols; gx++) {
     for (let gy = 0; gy < rows; gy++) {
@@ -1310,6 +1315,14 @@ export function drawRoom(
       if (offscreen(sx, sy, 60 * l.scale)) continue;
       tilePath(ctx, sx, sy, l);
       const isHover = hover?.gx === gx && hover?.gy === gy;
+
+      if (hasBd) {
+        if (isHover) {
+          ctx.fillStyle = hoverColor;
+          ctx.fill();
+        }
+        continue;
+      }
 
       // Hain Avı: bölgelere göre renkli metal zemin
       if (slug === "hain-avi") {
@@ -1603,6 +1616,82 @@ export function drawFurni(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
   if (sway) ctx.transform(1, 0, Math.sin(time / 1100 + item.gx * 1.7 + item.gy) * sway, 1, 0, 0);
   ctx.translate(-ax, -ay);
   drawFurniBase(ctx, item, l, time);
+  ctx.restore();
+}
+
+/** Sanatçı tablosu: ahşap şövale + çerçeveli tuval (eşya kimliğinden küçük renk farkı) */
+function drawArtwork(ctx: Ctx, type: string, id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  // şövale ayakları
+  ctx.strokeStyle = "#92400e";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(-11, 1); ctx.lineTo(-5, -34);
+  ctx.moveTo(11, 1); ctx.lineTo(5, -34);
+  ctx.moveTo(0, 2); ctx.lineTo(0, -30);
+  ctx.stroke();
+  // çerçeve
+  ctx.fillStyle = "#b45309";
+  ctx.fillRect(-15, -50, 30, 28);
+  ctx.fillStyle = "#fde68a";
+  ctx.fillRect(-13, -48, 26, 24);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-12, -47, 24, 22);
+  ctx.clip();
+  if (type === "art_landscape") {
+    const g = ctx.createLinearGradient(0, -47, 0, -25);
+    g.addColorStop(0, `hsl(${200 + (hue % 30)} 70% 70%)`);
+    g.addColorStop(1, "#fde68a");
+    ctx.fillStyle = g;
+    ctx.fillRect(-12, -47, 24, 22);
+    ctx.fillStyle = `hsl(${220 + (hue % 40)} 25% 45%)`;
+    ctx.beginPath(); ctx.moveTo(-12, -28); ctx.lineTo(-4, -42); ctx.lineTo(2, -33); ctx.lineTo(7, -40); ctx.lineTo(12, -28); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath(); ctx.moveTo(-5.5, -39.5); ctx.lineTo(-4, -42); ctx.lineTo(-2.4, -39.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = `hsl(${110 + (hue % 30)} 45% 38%)`;
+    ctx.fillRect(-12, -29, 24, 5);
+    ctx.fillStyle = "#fef08a";
+    ctx.beginPath(); ctx.arc(8, -43, 2.6, 0, Math.PI * 2); ctx.fill();
+  } else if (type === "art_portrait") {
+    ctx.fillStyle = `hsl(${hue} 35% 38%)`;
+    ctx.fillRect(-12, -47, 24, 22);
+    ctx.fillStyle = "#fed7aa";
+    ctx.beginPath(); ctx.arc(0, -38, 5.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsl(${(hue + 40) % 360} 40% 22%)`;
+    ctx.beginPath(); ctx.arc(0, -40, 5.6, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = `hsl(${(hue + 180) % 360} 55% 48%)`;
+    ctx.beginPath(); ctx.ellipse(0, -25, 9, 6, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#1c1917";
+    ctx.fillRect(-2.4, -38.5, 1.3, 1.3); ctx.fillRect(1.2, -38.5, 1.3, 1.3);
+  } else if (type === "art_abstract") {
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(-12, -47, 24, 22);
+    const cols = [`hsl(${hue} 80% 55%)`, `hsl(${(hue + 120) % 360} 80% 55%)`, `hsl(${(hue + 240) % 360} 80% 55%)`, "#111827"];
+    ctx.fillStyle = cols[0]; ctx.beginPath(); ctx.arc(-4, -40, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = cols[1]; ctx.fillRect(1, -37, 10, 9);
+    ctx.fillStyle = cols[2]; ctx.beginPath(); ctx.moveTo(-12, -25); ctx.lineTo(-3, -34); ctx.lineTo(2, -25); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = cols[3]; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-12, -44); ctx.quadraticCurveTo(0, -30, 12, -45); ctx.stroke();
+  } else {
+    const g = ctx.createLinearGradient(0, -47, 0, -25);
+    g.addColorStop(0, `hsl(${215 + (hue % 25)} 55% 22%)`);
+    g.addColorStop(1, `hsl(${200 + (hue % 25)} 70% 45%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(-12, -47, 24, 22);
+    ctx.fillStyle = "#fef9c3";
+    ctx.beginPath(); ctx.arc(-6, -42, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(3, -41, 3.4, 12);
+    ctx.fillStyle = "#dc2626";
+    ctx.fillRect(3, -37, 3.4, 2.4); ctx.fillRect(3, -32, 3.4, 2.4);
+    ctx.fillStyle = "#475569";
+    ctx.fillRect(2, -29, 5.4, 3);
+    ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-12, -28); ctx.quadraticCurveTo(-6, -31, 0, -28); ctx.quadraticCurveTo(6, -25, 12, -28); ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -2129,6 +2218,12 @@ function drawFurniBase(ctx: Ctx, item: FurniItem, l: Layout, time: number) {
       ctx.beginPath();
       ctx.ellipse(0, -12, 18, 9, 0, 0, Math.PI * 2);
       ctx.fill();
+      break;
+    case "art_landscape":
+    case "art_portrait":
+    case "art_abstract":
+    case "art_sea":
+      drawArtwork(ctx, item.type, item.id);
       break;
     case "bookshelf": {
       ctx.fillStyle = "#78350f";
@@ -3143,6 +3238,112 @@ function drawNewspaper(ctx: Ctx, ay: number, time: number) {
   ctx.restore();
 }
 
+/** Meslek el eşyaları (v42). active = efekt oynuyor (gitar çalıyor, klaket vuruluyor...) */
+function drawProfTool(ctx: Ctx, tool: string, ay: number, time: number, active: boolean) {
+  ctx.save();
+  if (tool === "sancak") {
+    const w = Math.sin(time / (active ? 90 : 320)) * (active ? 4.5 : 1.6);
+    ctx.strokeStyle = "#92400e";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(11, ay - 2); ctx.lineTo(11, ay - 56); ctx.stroke();
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath(); ctx.arc(11, ay - 57, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#0ea5e9";
+    ctx.beginPath();
+    ctx.moveTo(11.5, ay - 54);
+    ctx.quadraticCurveTo(21, ay - 55 + w, 31, ay - 49 + w * 1.4);
+    ctx.quadraticCurveTo(22, ay - 46 + w, 31, ay - 41 + w * 1.2);
+    ctx.quadraticCurveTo(21, ay - 40 + w, 11.5, ay - 40);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(15, ay - 51); ctx.lineTo(24, ay - 44 + w * 0.6); ctx.moveTo(24, ay - 51 + w * 0.6); ctx.lineTo(15, ay - 44); ctx.stroke();
+  } else if (tool === "pusula") {
+    const bob = Math.sin(time / 500) * 0.6;
+    ctx.translate(12, ay - 21 + bob);
+    ctx.strokeStyle = "#a16207"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(-3, -11); ctx.stroke();
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fefce8";
+    ctx.beginPath(); ctx.arc(0, 0, 4.6, 0, Math.PI * 2); ctx.fill();
+    const a = time / (active ? 120 : 900);
+    ctx.rotate(a);
+    ctx.fillStyle = "#dc2626";
+    ctx.beginPath(); ctx.moveTo(0, -4.2); ctx.lineTo(1.5, 0); ctx.lineTo(-1.5, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#334155";
+    ctx.beginPath(); ctx.moveTo(0, 4.2); ctx.lineTo(1.5, 0); ctx.lineTo(-1.5, 0); ctx.closePath(); ctx.fill();
+  } else if (tool === "palet") {
+    ctx.translate(11, ay - 21);
+    ctx.rotate(-0.25);
+    ctx.fillStyle = "#d6a15f";
+    ctx.beginPath(); ctx.ellipse(0, 0, 8.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#92400e"; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.fillStyle = "#78350f";
+    ctx.beginPath(); ctx.arc(-3.6, 2.2, 1.5, 0, Math.PI * 2); ctx.fill();
+    const dots: [number, number, string][] = [[-5, -1.5, "#ef4444"], [-2, -3.4, "#facc15"], [2, -3.2, "#22c55e"], [5, -0.5, "#3b82f6"], [3.6, 3, "#a855f7"]];
+    for (const [x, y, c] of dots) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fill(); }
+    const st = active ? Math.sin(time / 110) * 4 : 0;
+    ctx.strokeStyle = "#78350f"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(6 + st, -2); ctx.lineTo(14 + st, -13); ctx.stroke();
+    ctx.strokeStyle = "#ec4899"; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(14 + st, -13); ctx.lineTo(16 + st, -16); ctx.stroke();
+  } else if (tool === "gitar") {
+    const sh = active ? Math.sin(time / 60) * 1.4 : 0;
+    ctx.translate(2 + sh, ay - 14);
+    ctx.rotate(-0.55);
+    ctx.fillStyle = "#7c3aed";
+    ctx.beginPath(); ctx.ellipse(0, 0, 9, 6.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(7, -1, 5.5, 4.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#1e1b4b";
+    ctx.fillRect(-2, -1.4, 4, 2.8);
+    ctx.fillStyle = "#292524";
+    ctx.fillRect(9, -1.4, 17, 2.8);
+    ctx.fillStyle = "#facc15";
+    ctx.fillRect(25, -2.4, 5, 4.8);
+    ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(-3, 0); ctx.lineTo(28, 0); ctx.stroke();
+  } else if (tool === "kamera") {
+    ctx.translate(12, ay - 31);
+    ctx.fillStyle = "#1f2937";
+    ctx.fillRect(-6, -4, 12, 8.5);
+    ctx.fillStyle = "#374151";
+    ctx.fillRect(-3.5, -6, 4.5, 2.2);
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath(); ctx.arc(0, 0.4, 3.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#38bdf8";
+    ctx.beginPath(); ctx.arc(0, 0.4, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fbbf24";
+    ctx.fillRect(3.4, -3.4, 1.8, 1.4);
+    if (active) {
+      const k = (time % 300) / 300;
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(8, -2, 5 + k * 12, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (tool === "klaket") {
+    ctx.translate(12, ay - 20);
+    ctx.rotate(-0.2);
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(-7, -3, 14, 9);
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(-5.5, 0.5, 11, 1.2); ctx.fillRect(-5.5, 3.2, 8, 1.2);
+    const open = active ? Math.abs(Math.sin(time / 170)) * 0.9 : 0.35;
+    ctx.save();
+    ctx.translate(-7, -3);
+    ctx.rotate(-open);
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(0, -3.8, 14, 3.8);
+    ctx.fillStyle = "#f8fafc";
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 3.5, 0); ctx.lineTo(i * 3.5 + 1.6, 0); ctx.lineTo(i * 3.5 + 3.2, -3.8); ctx.lineTo(i * 3.5 + 1.6, -3.8);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawFishingRod(ctx: Ctx, ay: number, isFishing: boolean, time: number) {
   const sway = isFishing ? Math.sin(time / 180) * 3 : 0;
   ctx.strokeStyle = "#d97706";
@@ -3525,13 +3726,16 @@ export function drawAvatar(ctx: Ctx, p: Player, l: Layout, isMe: boolean, time: 
 
   if (p.tool === "fishing_rod" || p.isFishing) drawFishingRod(ctx, ay, Boolean(p.isFishing), time);
   else if (p.tool === "newspaper") drawNewspaper(ctx, ay, time);
+  else if (p.tool && PROF_BY_TOOL[p.tool]) drawProfTool(ctx, p.tool, ay, time, Boolean(p.fxAnim));
   ctx.restore();
   FACE_BACK = false;
 
   ctx.font = "bold 11px sans-serif";
   ctx.fillStyle = nameColor;
   const NPC_ICON: Record<NpcKind, string> = { fisher: "🎣 ", chef: "👨‍🍳 ", farmer: "🌾 ", miner: "⛏️ ", dealer: "🎰 ", oyunika: "🎲 ", stylist: "👗 ", barber: "✂️ ", accessory: "🎀 ", furnisher: "🛋️ ", costume: "🎭 ", realtor: "🏡 ", guide: "🧭 ", lara: "🎉 ", demir: "🚀 ", ali: "🕹️ ", alper: "📰 " };
-  const prefix = p.isNpc ? NPC_ICON[p.npcKind ?? "fisher"] : isStaff ? "⚔️ " : p.role === "vip" ? "💎 " : "";
+  const prof = p.isNpc ? null : effProfession(p.role, p.profession);
+  const profBadge = prof ? `${PROFESSIONS[prof].icon} ` : "";
+  const prefix = p.isNpc ? NPC_ICON[p.npcKind ?? "fisher"] : profBadge + (isStaff && prof !== "suvari" ? "⚔️ " : !isStaff && p.role === "vip" ? "💎 " : "");
   centerText(ctx, `${prefix}${p.name}`, 0, lying ? 4 : 16);
   if (p.status && !p.isNpc && !lying) {
     ctx.font = "italic 9px sans-serif";

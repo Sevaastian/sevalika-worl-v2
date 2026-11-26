@@ -26,6 +26,8 @@ import {
   levelOf,
   FURNI_BY_TYPE,
   FURNI_DIRS,
+  PROF_BY_TOOL,
+  canUseProfTool,
   ROLE_RANK,
   homeSlug,
   isHomeSlug,
@@ -52,6 +54,9 @@ import type {
   FurniType,
   HomeAccess,
   Listing,
+  NewsPost,
+  NotifItem,
+  Profession,
   Profile,
   BadgeState,
   PopularHome,
@@ -181,6 +186,19 @@ export interface Backend {
 
   // Admin
   adminSetRole(username: string, role: UserRole): Promise<void>;
+  adminSetProfession(username: string, profession: Profession | null): Promise<void>;
+
+  // Meslekler (v42)
+  guideReward(username: string): Promise<{ coins: number; earned: number }>;
+  profCheer(username: string): Promise<void>;
+  tipPlayer(username: string, amount: number): Promise<number>;
+  paintArtwork(style: string): Promise<string[]>;
+  submitNews(title: string, body: string): Promise<void>;
+  newsList(): Promise<NewsPost[]>;
+  adminDeleteNews(id: number): Promise<void>;
+  shootInvite(username: string): Promise<void>;
+  shootRespond(director: string, accept: boolean): Promise<void>;
+  shootFinish(): Promise<{ coins: number; earned: number; cast: number }>;
   adminGift(username: string, amount: number): Promise<void>;
   adminKick(username: string): Promise<void>;
   adminAnnounce(text: string): Promise<void>;
@@ -200,6 +218,8 @@ export interface Backend {
   subscribeAdminEvents(cb: (e: AdminEvent) => void): () => void;
   subscribeChat(slug: string, uid: string, onChat: (m: ChatRow) => void, onWhisper: (m: ChatRow) => void): () => void;
   subscribeUserEvents(uid: string, cb: (e: UserEvent) => void): () => void;
+  fetchNotifications(): Promise<{ items: NotifItem[]; seen: number }>;
+  markNotificationsRead(): Promise<void>;
 }
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -225,6 +245,8 @@ interface ProfileRow {
   id: string;
   username: string;
   role: UserRole;
+  profession?: Profession | null;
+  prof_points?: number;
   is_founder: boolean;
   coins: number;
   shirt_color: string;
@@ -254,6 +276,8 @@ const mapProfile = (r: ProfileRow): Profile => ({
   id: r.id,
   username: r.username,
   role: r.role,
+  profession: r.profession ?? null,
+  profPoints: r.prof_points ?? 0,
   isFounder: r.is_founder,
   coins: r.coins,
   shirtColor: r.shirt_color,
@@ -456,8 +480,8 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
 
     async publicProfiles(names) {
       if (!names.length) return [];
-      const { data } = await sb.from("public_profiles").select("id, username, role").in("username", names);
-      return (data ?? []).map((r) => ({ id: r.id as string, username: r.username as string, role: r.role as UserRole }));
+      const { data } = await sb.from("public_profiles").select("id, username, role, profession").in("username", names);
+      return (data ?? []).map((r) => ({ id: r.id as string, username: r.username as string, role: r.role as UserRole, profession: (r.profession as Profession | null) ?? null }));
     },
 
     getFriends: () => rpc<Friend[]>("get_friends"),
@@ -546,6 +570,20 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
     myBlocks: () => rpc<string[]>("my_blocks"),
 
     adminSetRole: (u, role) => rpc("admin_set_role", { p_username: u, p_role: role }),
+    adminSetProfession: (u, prof) => rpc("admin_set_profession", { p_username: u, p_prof: prof }),
+    guideReward: (u) => rpc<{ coins: number; earned: number }>("guide_reward", { p_username: u }),
+    profCheer: (u) => rpc("prof_cheer", { p_username: u }),
+    tipPlayer: (u, amount) => rpc<number>("tip_player", { p_username: u, p_amount: amount }),
+    async paintArtwork(style) {
+      const r = await rpc<{ inventory: string[] }>("paint_artwork", { p_style: style });
+      return r.inventory;
+    },
+    submitNews: (title, body) => rpc("submit_news", { p_title: title, p_body: body }),
+    newsList: () => rpc<NewsPost[]>("news_list"),
+    adminDeleteNews: (id) => rpc("admin_delete_news", { p_id: id }),
+    shootInvite: (u) => rpc("shoot_invite", { p_username: u }),
+    shootRespond: (d, accept) => rpc("shoot_respond", { p_director: d, p_accept: accept }),
+    shootFinish: () => rpc<{ coins: number; earned: number; cast: number }>("shoot_finish"),
     adminGift: (u, n) => rpc("admin_gift", { p_username: u, p_amount: n }),
     adminKick: (u) => rpc("admin_kick", { p_username: u }),
     adminAnnounce: (text) => rpc("admin_announce", { p_text: text }),
@@ -594,6 +632,8 @@ function createSupabaseBackend(sb: SupabaseClient): Backend {
       return () => void sb.removeChannel(ch);
     },
 
+    fetchNotifications: () => rpc<{ items: NotifItem[]; seen: number }>("my_notifications"),
+    markNotificationsRead: () => rpc("notif_mark_read"),
     subscribeUserEvents(uid, cb) {
       const ch = sb
         .channel(`db-user-events:${rid()}`)
@@ -615,6 +655,9 @@ function createDemoBackend(): Backend {
   let friends: Friend[] = [];
   let quiz: { question: string; answer: string; reward: number; endsAt: number; active: boolean } | null = null;
   let reports: Report[] = [];
+  let demoNews: NewsPost[] = [];
+  let demoNewsSeq = 0;
+  const demoInvites = new Set<string>();
   let log: AdminLogEntry[] = [];
   let reportSeq = 0;
   const homeAccess: HomeAccess[] = ["open"];
@@ -624,8 +667,12 @@ function createDemoBackend(): Backend {
   const homeLiked = new Set<string>();
   const userListeners = new Set<(e: UserEvent) => void>();
   let userSeq = 0;
+  let demoNotifs: NotifItem[] = [];
+  let demoNotifSeen = 0;
   const userEmit = (kind: string, payload: Record<string, unknown>) => {
     const ev: UserEvent = { id: ++userSeq, kind, payload };
+    demoNotifs.unshift({ id: ev.id, kind, payload, created_at: new Date().toISOString() });
+    demoNotifs = demoNotifs.slice(0, 40);
     setTimeout(() => userListeners.forEach((cb) => cb(ev)), 0);
   };
   const QUEST_DEFS: Record<string, { goal: number; coins: number; xp: number }> = {
@@ -977,6 +1024,7 @@ function createDemoBackend(): Backend {
     async buyAndPlace(slug, type, gx, gy, rot) {
       const p = need();
       checkPlace(slug, type, gx, gy, rot);
+      if (FURNI_BY_TYPE[type].artwork) throw new Error("Tablolar sadece Sanatçılar tarafından çizilir.");
       const price = FURNI_BY_TYPE[type].price;
       if (p.role !== "admin") {
         if (p.coins < price) throw new Error("Yeterli Sanilin yok.");
@@ -1170,7 +1218,7 @@ function createDemoBackend(): Backend {
     async publicProfiles(names) {
       const out: PublicProfile[] = [];
       for (const n of names) {
-        if (me && n === me.username) out.push({ id: me.id, username: n, role: me.role });
+        if (me && n === me.username) out.push({ id: me.id, username: n, role: me.role, profession: me.profession ?? null });
         else if (n.toLowerCase() in known) out.push({ username: n, role: known[n.toLowerCase()] });
       }
       return out;
@@ -1182,7 +1230,15 @@ function createDemoBackend(): Backend {
     async friendRequest(username) {
       requireKnown(username);
       if (friends.some((f) => f.username.toLowerCase() === username.toLowerCase())) throw new Error("Zaten listende.");
+      // Demo: istek birkaç saniye sonra otomatik kabul edilir
       friends.push({ username, role: known[username.toLowerCase()], relation: "outgoing", online: false, room: null, home: null });
+      setTimeout(() => {
+        const f = friends.find((x) => x.username.toLowerCase() === username.toLowerCase() && x.relation === "outgoing");
+        if (f) {
+          f.relation = "friend";
+          userEmit("friend_accepted", { from: f.username });
+        }
+      }, 2500);
     },
     async friendRespond(username, accept) {
       const f = friends.find((x) => x.username.toLowerCase() === username.toLowerCase() && x.relation === "incoming");
@@ -1290,7 +1346,8 @@ function createDemoBackend(): Backend {
     async equipTool(tool) {
       const p = need();
       if (tool === "fishing_rod" && !p.inventory.includes("fishing_rod")) throw new Error("Oltan yok.");
-      if (tool !== null && tool !== "fishing_rod" && tool !== "newspaper") throw new Error("Geçersiz alet.");
+      if (tool !== null && tool !== "fishing_rod" && tool !== "newspaper" && !PROF_BY_TOOL[tool]) throw new Error("Geçersiz alet.");
+      if (tool && PROF_BY_TOOL[tool] && !canUseProfTool(p.role, p.profession, tool)) throw new Error("Bu alet mesleğine uygun değil.");
       p.tool = tool;
       return tool;
     },
@@ -1370,8 +1427,67 @@ function createDemoBackend(): Backend {
       const p = need();
       p.role = role;
       p.inventory = role === "suvari" || role === "admin" ? (p.inventory.includes("suvari_ati") ? p.inventory : ["suvari_ati", ...p.inventory]) : p.inventory.filter((i) => i !== "suvari_ati");
+      if (p.tool === "sancak" && role !== "suvari" && role !== "admin") p.tool = null;
       addLog("role", username, role);
       emit("role", null, p.username, { role });
+    },
+    async adminSetProfession(username, profession) {
+      requireSelf(username);
+      const p = need();
+      p.profession = profession;
+      if (p.tool && PROF_BY_TOOL[p.tool] && p.role !== "admin") p.tool = null;
+      emit("role", null, p.username, { role: p.role, profession });
+    },
+    async guideReward() {
+      throw new Error("Demo'da rehber turu için ikinci bir oyuncu gerekir.");
+    },
+    async profCheer(username) {
+      need();
+      requireKnown(username);
+    },
+    async tipPlayer(username, amount) {
+      const p = need();
+      requireKnown(username);
+      if (amount < 5 || amount > 500) throw new Error("Bahşiş 5 ile 500 Sanil arasında olmalı.");
+      if (p.coins < amount) throw new Error("Yeterli Sanilin yok.");
+      p.coins -= amount;
+      return p.coins;
+    },
+    async paintArtwork(style) {
+      const p = need();
+      if (!canUseProfTool(p.role, p.profession, "palet")) throw new Error("Tablo çizmek Sanatçılara özel.");
+      if (!style.startsWith("art_")) throw new Error("Bilinmeyen tablo.");
+      p.inventory = [...p.inventory, style];
+      return [...p.inventory];
+    },
+    async submitNews(title, body) {
+      const p = need();
+      if (!canUseProfTool(p.role, p.profession, "kamera")) throw new Error("Haber yazmak Gazetecilere özel.");
+      if (title.trim().length < 3) throw new Error("Başlık en az 3 karakter olmalı.");
+      if (body.trim().length < 10) throw new Error("Haber metni en az 10 karakter olmalı.");
+      demoNews = [{ id: ++demoNewsSeq, author: p.username, title: title.trim().slice(0, 60), body: body.trim().slice(0, 400), created_at: new Date().toISOString() }, ...demoNews].slice(0, 6);
+      p.coins += 40;
+    },
+    async newsList() {
+      return structuredClone(demoNews);
+    },
+    async adminDeleteNews(id) {
+      demoNews = demoNews.filter((n) => n.id !== id);
+    },
+    async shootInvite(username) {
+      need();
+      requireKnown(username);
+      demoInvites.add(username);
+    },
+    async shootRespond() {},
+    async shootFinish() {
+      const p = need();
+      if (demoInvites.size < 2) throw new Error("Çekim için en az 2 figüran davetini kabul etmeli.");
+      const cast = demoInvites.size;
+      demoInvites.clear();
+      const earned = 50 + 25 * Math.min(cast, 6);
+      p.coins += earned;
+      return { coins: p.coins, earned, cast };
     },
     async adminGift(username, amount) {
       requireSelf(username);
@@ -1770,6 +1886,12 @@ function createDemoBackend(): Backend {
     },
     subscribeChat() {
       return () => {};
+    },
+    async fetchNotifications() {
+      return { items: structuredClone(demoNotifs), seen: demoNotifSeen };
+    },
+    async markNotificationsRead() {
+      demoNotifSeen = userSeq;
     },
     subscribeUserEvents(_uid, cb) {
       userListeners.add(cb);

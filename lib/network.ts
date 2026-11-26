@@ -24,6 +24,7 @@ export interface NetHandlers {
   onMove(p: { id: string; from: Tile; path: Tile[] }): void;
   onAction(p: { id: string; isDancing?: boolean; isSitting?: boolean; isRidingHorse?: boolean; isFishing?: boolean }): void;
   onEmote(p: { id: string; emoji: string }): void;
+  onFx(p: { id: string; kind: string; gx?: number; gy?: number }): void;
 }
 
 /**
@@ -101,6 +102,7 @@ export class RoomNetwork {
       .on("broadcast", { event: "move" }, ({ payload }) => this.h.onMove(payload))
       .on("broadcast", { event: "action" }, ({ payload }) => this.h.onAction(payload))
       .on("broadcast", { event: "emote" }, ({ payload }) => this.h.onEmote(payload))
+      .on("broadcast", { event: "fx" }, ({ payload }) => this.h.onFx(payload))
       .subscribe(async (status, err) => {
         if (status === "SUBSCRIBED") {
           this.retries = 0;
@@ -114,7 +116,7 @@ export class RoomNetwork {
       });
   }
 
-  send(event: "move" | "action" | "emote", payload: Record<string, unknown>) {
+  send(event: "move" | "action" | "emote" | "fx", payload: Record<string, unknown>) {
     void this.channel?.send({ type: "broadcast", event, payload });
   }
 

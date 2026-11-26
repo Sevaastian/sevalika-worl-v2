@@ -10,7 +10,8 @@ const KEY = "sw_settings";
 const DEFAULTS: Settings = { sfxVol: 0.8, musicVol: 0.6, low: false, f3d: false };
 
 /** Çizim kodunun okuduğu canlı kalite bayrağı. */
-export const gfx = { low: false, f3d: false };
+/** res: çizim çözünürlük çarpanı (1 = tam). Çok yavaş cihazlarda otomatik düşer ve hatırlanır. */
+export const gfx = { low: false, f3d: false, res: 1 };
 
 export function loadSettings(): Settings {
   try {

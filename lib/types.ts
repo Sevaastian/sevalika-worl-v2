@@ -1,6 +1,26 @@
 export type UserRole = "user" | "vip" | "suvari" | "admin";
 
+/** Prestij mesleği (süvari = süvari rütbesi). */
+export type Profession = "suvari" | "rehber" | "sanatci" | "muzisyen" | "gazeteci" | "yonetmen";
+
+/** Meslek efektleri (odadaki herkese yayınlanan geçici görseller) */
+export type ProfFxKind = "flash" | "marker" | "clap" | "music" | "banner" | "paint";
+export interface ProfFx {
+  id: string;
+  kind: ProfFxKind;
+  playerId: string;
+  gx: number;
+  gy: number;
+  createdAt: number;
+  dur: number;
+  name: string;
+}
+
 export type FurniType =
+  | "art_landscape"
+  | "art_portrait"
+  | "art_abstract"
+  | "art_sea"
   | "fish_hut"
   | "mine_entrance"
   | "ore_cart"
@@ -90,6 +110,9 @@ export interface Profile extends Look {
   id: string;
   username: string;
   role: UserRole;
+  /** Admin atamalı meslek (süvari için role bak; effProfession kullan) */
+  profession?: Profession | null;
+  profPoints?: number;
   isFounder: boolean;
   coins: number;
   inventory: string[];
@@ -129,6 +152,9 @@ export interface Player extends Look {
   gy: number;
   path: Tile[];
   role: UserRole;
+  profession?: Profession | null;
+  /** Meslek efekti oynuyor (gitar çalma vb.) */
+  fxAnim?: string | null;
   isSitting: boolean;
   isDancing: boolean;
   isRidingHorse: boolean;
@@ -214,6 +240,7 @@ export interface PublicProfile {
   id?: string;
   username: string;
   role: UserRole;
+  profession?: Profession | null;
 }
 
 /** `messages` tablosundan gelen satır (gönderici sunucuda doğrulanmıştır) */
@@ -226,6 +253,13 @@ export interface ChatRow {
   target_id: string | null;
   target: string | null;
   text: string;
+}
+
+export interface NotifItem {
+  id: number;
+  kind: string;
+  payload: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface UserEvent {
@@ -300,6 +334,8 @@ export interface TournamentState {
 export interface ProfileCard {
   username: string;
   role: UserRole;
+  profession?: Profession | null;
+  prof_points?: number;
   xp: number;
   level: number;
   fish_caught: number;
@@ -427,4 +463,12 @@ export interface GameEvent {
   endsAt: string;
   active: boolean;
   claimed: boolean;
+}
+
+export interface NewsPost {
+  id: number;
+  author: string;
+  title: string;
+  body: string;
+  created_at: string;
 }

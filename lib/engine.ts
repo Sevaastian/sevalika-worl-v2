@@ -1,5 +1,5 @@
 import { mipDraw } from "./mip";
-import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, isWaterTile, PARTI_PODIUM } from "./constants";
+import { BASE_TILE_H, BASE_TILE_W, FURNI_BY_TYPE, GRID_SIZE, ROOM_BLOCK, isWaterTile, PARTI_PODIUM } from "./constants";
 import { setView, offscreen } from "./view";
 import { drawAvatar, drawBubble, drawFlag, drawFurni, drawHainBody, drawHainMark, drawHainWall, drawPet, drawPodiumBlock, podiumLift, drawRock, drawRoom, drawRug, roomRocks, roomWalls } from "./draw";
 import { VEH_FW, VEH_FH, VEH_FEET, vehicleSheet } from "./vehicles";
@@ -8,7 +8,8 @@ import { lighting, updateLighting } from "./ambience";
 import { gfx } from "./settings";
 import { findPath } from "./pathfinding";
 import { FURNI_SPRITES, sprites } from "./sprites";
-import type { ChatBubble, Emote, FurniItem, Player, RoomDef, Tile, WeatherMode } from "./types";
+import { drawProfFx } from "./proffx";
+import type { ChatBubble, Emote, FurniItem, Player, ProfFx, RoomDef, Tile, WeatherMode } from "./types";
 
 const WALK_SPEED = 3.4; // kare/sn
 const HORSE_SPEED = 6.4; // süvari atı: yürümeden ~%90 hızlı (sunucu limiti 7 kare/sn + tolerans)
@@ -23,6 +24,8 @@ export class GameEngine {
   players: Player[] = [];
   bubbles: ChatBubble[] = [];
   emotes: Emote[] = [];
+  /** Meslek efektleri (flaş, işaret, klaket, müzik...) */
+  profFx: ProfFx[] = [];
   /** Gerçek saate göre gece/gündüz tonlaması */
   nightEnabled = true;
   weather: WeatherMode = "auto";
@@ -119,13 +122,31 @@ export class GameEngine {
   private perfPrev = 0;
   private perfStart = 0;
   private watchPerf(ts: number) {
-    if (gfx.low || typeof window === "undefined") return;
-    if (!this.perfStart) this.perfStart = ts;
+    if (typeof window === "undefined") return;
+    if (!this.perfStart) {
+      this.perfStart = ts;
+      try {
+        const r = Number(window.localStorage.getItem("sw_res"));
+        if (r >= 0.35 && r < 1) {
+          gfx.res = r;
+          gfx.low = true;
+        }
+      } catch {}
+    }
     if (ts - this.perfStart < 4000) { this.perfPrev = ts; return; } // ısınma (yükleme/sprite çözme)
     if (this.perfPrev) { this.perfSum += Math.min(250, ts - this.perfPrev); this.perfN++; }
     this.perfPrev = ts;
-    if (this.perfN >= 150) {
-      if (this.perfSum / this.perfN > 34) gfx.low = true;
+    if (this.perfN >= (gfx.low ? 40 : 150)) {
+      const avg = this.perfSum / this.perfN;
+      if (!gfx.low) {
+        if (avg > 34) gfx.low = true;
+      } else if (avg > 45 && gfx.res > 0.36) {
+        // Yazılım çizimi / zayıf GPU: JS hızlı ama ekrana işleme yavaş -> iç çözünürlüğü kademeli düşür
+        gfx.res = Math.max(0.35, Math.round((gfx.res - 0.15) * 100) / 100);
+        try {
+          window.localStorage.setItem("sw_res", String(gfx.res));
+        } catch {}
+      }
       this.perfN = 0;
       this.perfSum = 0;
     }
@@ -149,16 +170,16 @@ export class GameEngine {
     if (!this.fpsT) this.fpsT = ts;
     if (ts - this.fpsT >= 1000) {
       const n = this.fpsFrames;
-      this.fpsShow = `${Math.round((n * 1000) / (ts - this.fpsT))} fps | güncelle ${(this.fpsU / n).toFixed(1)} ms | çiz ${(this.fpsR / n).toFixed(1)} ms | en kötü ${this.fpsWorst.toFixed(0)} ms | oyuncu ${this.players.length} eşya ${this.furni.length} | ${gfx.low ? "düşük" : "normal"} | ${Math.round(window.devicePixelRatio * 100) / 100}x`;
+      this.fpsShow = `${Math.round((n * 1000) / (ts - this.fpsT))} fps | güncelle ${(this.fpsU / n).toFixed(1)} ms | çiz ${(this.fpsR / n).toFixed(1)} ms | en kötü ${this.fpsWorst.toFixed(0)} ms | oyuncu ${this.players.length} eşya ${this.furni.length} | ${gfx.low ? "düşük" : "normal"} | ${Math.round(window.devicePixelRatio * 100) / 100}x | çöz ${gfx.res}`;
       this.fpsFrames = 0; this.fpsU = 0; this.fpsR = 0; this.fpsWorst = 0; this.fpsT = ts;
     }
     const c = this.ctx;
     c.save();
-    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.setTransform(gfx.res, 0, 0, gfx.res, 0, 0);
     c.font = "bold 13px monospace";
     const w = c.measureText(this.fpsShow).width + 12;
     c.fillStyle = "rgba(0,0,0,0.75)";
-    const ox = Math.max(4, (this.canvas.width - w) / 2);
+    const ox = Math.max(4, (this.canvas.width / gfx.res - w) / 2);
     c.fillRect(ox, 6, w, 22);
     c.fillStyle = "#4ade80";
     c.fillText(this.fpsShow, ox + 6, 22);
@@ -205,6 +226,7 @@ export class GameEngine {
     for (const pl of this.players) if (pl.isNpc) set.add(Math.round(pl.gy) * cols + Math.round(pl.gx));
     for (const [rx, ry] of roomRocks(this.room.slug)) set.add(ry * cols + rx);
     for (const [wx, wy] of roomWalls(this.room.slug)) set.add(wy * cols + wx);
+    for (const [bx, by] of ROOM_BLOCK[this.room.slug] ?? []) set.add(by * cols + bx);
     for (let gx = 0; gx < cols; gx++) {
       for (let gy = 0; gy < rows; gy++) {
         if (isWaterTile(this.room.slug, gx, gy)) set.add(gy * cols + gx);
@@ -405,7 +427,19 @@ export class GameEngine {
 
     this.updateAmbient(dt, mode);
     this.updateEventFx(dt);
-    for (const p of this.players) p.emoteAnim = null;
+    for (const p of this.players) {
+      p.emoteAnim = null;
+      p.fxAnim = null;
+    }
+    {
+      const tn = performance.now();
+      this.profFx = this.profFx.filter((f) => tn - f.createdAt < f.dur);
+      for (const f of this.profFx) {
+        if (f.kind === "marker") continue;
+        const pl = this.players.find((x) => x.id === f.playerId);
+        if (pl) pl.fxAnim = f.kind;
+      }
+    }
     for (const e of this.emotes) {
       const pl = this.players.find((x) => x.id === e.playerId);
       if (pl) pl.emoteAnim = e.emoji;
@@ -670,7 +704,7 @@ export class GameEngine {
     const parent = this.canvas.parentElement;
     const w = parent?.clientWidth || 900;
     const h = parent?.clientHeight || 600;
-    const dpr = gfx.low ? 1 : Math.min(2, window.devicePixelRatio || 1);
+    const dpr = (gfx.low ? 1 : Math.min(2, window.devicePixelRatio || 1)) * gfx.res;
     if (w !== this.width || h !== this.height || this.canvas.width !== Math.round(w * dpr)) {
       this.width = w;
       this.height = h;
@@ -912,6 +946,8 @@ export class GameEngine {
       ctx.fillText(e.emoji, sx - w / 2, sy - 58 * l.scale - rise);
       ctx.globalAlpha = 1;
     }
+
+    if (this.profFx.length) drawProfFx(ctx, l, this.profFx, this.players, now);
 
     this.drawVision(ctx, l, width, height);
     this.drawNight(ctx, l, width, height);
